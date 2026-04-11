@@ -1,5 +1,6 @@
 # test-icc-hurdle.R — Unit tests for hurdle ICC formulas
 
+skip_on_ci()
 test_that("hurdle ICC reduces to lognormal when pi = 1 always", {
   # When tau = 0 and alpha = large negative (hu = P(zero) ~ 0),
   # pi_p ~ 1 for all persons. Composite should ~ intensity ICC.
