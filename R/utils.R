@@ -23,7 +23,7 @@
 #'   or the raw family name.
 #' @keywords internal
 .detect_family <- function(fit) {
-  fam <- brms::family(fit)$family
+  fam <- stats::family(fit)$family
   if (fam %in% c("lognormal")) return("lognormal")
   if (fam %in% c("hurdle_lognormal")) return("hurdle_lognormal")
   if (fam %in% c("gaussian")) return("gaussian")
