@@ -118,13 +118,7 @@ print(info)
 
 ## Citation
 
-# If you use this package, please cite:
-# 
-# > Karunanayaka, R. (2026). Distributional Generalizability Theory: 
-# > Reliability for Non-Gaussian Measurements. *Manuscript submitted 
-# > to Psychometrika*.
-# 
-# A BibTeX entry will be provided upon publication.
+--
 
 ## License
 
