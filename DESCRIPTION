@@ -1,0 +1,30 @@
+Package: dgt
+Title: Distributional Generalizability Theory
+Version: 0.1.0
+Authors@R: 
+    person("Ruwan", "Karunanayaka", email = "ruwan.karunanayaka@ufv.ca", role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0008-2459-1569"))
+Description: Extends classical Generalizability Theory to non-Gaussian 
+    measurements via distributional response-scale ICCs, information-theoretic
+    reliability, and hurdle model decompositions. All quantities are computed
+    from the posterior of brms models. Implements the framework described in
+    "Distributional Generalizability Theory: Reliability for Non-Gaussian
+    Measurements."
+License: MIT + file LICENSE
+URL: https://github.com/rckaruna/dgt
+BugReports: https://github.com/rckaruna/dgt/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.0
+Depends: R (>= 4.1.0)
+Imports:
+    brms (>= 2.19.0),
+    posterior (>= 1.4.0),
+    stats,
+    ggplot2
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3

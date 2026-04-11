@@ -1,0 +1,270 @@
+---
+title: "Introduction to Distributional Generalizability Theory"
+author: "[Authors]"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to Distributional Generalizability Theory}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+## The Problem
+
+Classical Generalizability Theory defines reliability through the ICC:
+
+$$\text{ICC} = \frac{\sigma^2_p}{\sigma^2_p + \sigma^2_{\text{error}}}$$
+
+This assumes Gaussian measurements. When your data are lognormal (e.g., 
+expected goals, reaction times), Poisson (shot counts), or zero-inflated 
+(hurdle models), this ICC **overestimates reliability** on the scale you 
+actually interpret.
+
+The `dgt` package computes the correct response-scale reliability from any
+`brms` model posterior.
+
+## Installation
+
+```{r}
+remotes::install_github("username/dgt")
+```
+
+## Example 1: Lognormal Measurements
+
+### Simulate data
+
+```{r}
+library(dgt)
+library(brms)
+
+set.seed(42)
+n_players <- 100
+n_matches <- 20
+
+# True variance components (log scale)
+sigma_p <- 0.55   # Person SD
+sigma_e <- 0.75   # Error SD (occasions + residual)
+
+# Simulate
+player_effects <- rnorm(n_players, 0, sigma_p)
+dat <- expand.grid(player = 1:n_players, match = 1:n_matches)
+dat$player_effect <- player_effects[dat$player]
+dat$log_xG <- 0.5 + dat$player_effect + rnorm(nrow(dat), 0, sigma_e)
+dat$xG <- exp(dat$log_xG)
+
+# True values:
+# ICC_eta = 0.55^2 / (0.55^2 + 0.75^2) = 0.349
+# ICC_Y   = (exp(0.3025)-1) / (exp(0.865)-1) = 0.272
+```
+
+### Fit model
+
+```{r}
+fit <- brm(
+  log(xG) ~ 1 + (1 | player),
+  data = dat,
+  family = gaussian(),
+  chains = 4, iter = 2000,
+  cores = 4
+)
+```
+
+### Compute DGT reliability
+
+```{r}
+# All three ICCs
+result <- dgt_icc(fit, person_group = "player")
+print(result)
+
+# --- Distributional Generalizability Theory ---
+# Family: gaussian
+# 
+# ICC Estimates:
+#   ICC_eta (link-scale)             0.349  [0.280, 0.421]
+#   ICC_Y (response-scale)           0.272  [0.209, 0.340]
+#   ICC_I (information)              0.349  [0.280, 0.421]
+#   Overestimation (O)               1.28   [1.22, 1.35]
+```
+
+**Key result**: The link-scale ICC (0.349) overestimates the response-scale 
+ICC (0.272) by a factor of 1.28×. Classical G-theory says this measurement 
+is more reliable than it actually is.
+
+### D-study
+
+```{r}
+ds <- dgt_dstudy(fit, n_grid = 1:40, person_group = "player")
+plot(ds, target = 0.80)
+```
+
+This shows three curves:
+
+- **Link-scale** (what classical G-theory reports): reaches 0.80 faster
+- **Response-scale (arithmetic mean)**: the correct curve for practitioners
+- **Response-scale (geometric mean)**: higher, but targets the median
+
+```{r}
+# Required occasions
+dgt_required_n(fit, target = 0.80, person_group = "player")
+```
+
+### Overestimation analysis
+
+```{r}
+oe <- dgt_overestimation(fit, person_group = "player")
+print(oe)
+
+# --- DGT Overestimation Analysis (Theorem 6) ---
+# 
+#   Overestimation ratio (O)         1.28x  [ 1.22,  1.35]
+#   D-study ratio (D)                1.38x  [ 1.29,  1.49]
+```
+
+The D-study ratio (1.38×) is *worse* than the ICC overestimation (1.28×).
+This always holds (Proposition 15).
+
+### ICC posterior densities
+
+```{r}
+plot(result)
+```
+
+
+## Example 2: Hurdle-Lognormal Measurements
+
+For measurements with structural zeros (e.g., xG where some players don't
+shoot in a match):
+
+```{r}
+# Fit hurdle model
+fit_hurdle <- brm(
+  bf(xG ~ 1 + (1 | player),
+     hu ~ 1 + (1 | player)),
+  data = dat,
+  family = hurdle_lognormal(),
+  chains = 4, iter = 2000
+)
+
+# Three-part reliability decomposition
+result_h <- dgt_icc(fit_hurdle, person_group = "player")
+print(result_h)
+
+# --- Distributional Generalizability Theory ---
+# Family: hurdle_lognormal
+# 
+# ICC Estimates:
+#   ICC_Z (engagement)               0.146  [0.082, 0.224]
+#   ICC_Y* (intensity)               0.272  [0.205, 0.345]
+#   ICC_comp (composite)             0.199  [0.140, 0.268]
+# 
+# Variance Decomposition:
+#   V1 (binary noise)                0.4521  (35.2%)
+#   V2 (continuous noise)            0.3812  (29.7%)
+#   V3 (engagement signal)           0.0891  ( 6.9%)
+#   V4 (intensity signal)            0.2104  (16.4%)
+#   V5 (interaction signal)          0.1512  (11.8%)
+```
+
+### Variance decomposition diagnostic
+
+```{r}
+vd <- dgt_variance(fit_hurdle, person_group = "player")
+print(vd)
+
+# Bottleneck: Binary engagement process 
+#   (increase n_m for more Bernoulli trials)
+```
+
+### Information decomposition
+
+```{r}
+info <- dgt_info_icc(fit_hurdle, person_group = "player")
+print(info)
+
+# --- DGT Information ICC (Theorems 4-5) ---
+# Method: monte_carlo
+# 
+#   I_engage                                    0.078  [0.040, 0.128]
+#   I_intensity (per occasion, given Z=1)       0.347  [0.278, 0.421]
+#   I_total                                     0.250  [0.188, 0.318]
+#   ICC_I                                       0.394  [0.313, 0.471]
+```
+
+
+## Example 3: Poisson Counts
+
+For count data (e.g., number of shots per match):
+
+```{r}
+# Simulate Poisson counts
+dat$shots <- rpois(nrow(dat), exp(1.5 + player_effects[dat$player] * 0.3))
+
+fit_pois <- brm(
+  shots ~ 1 + (1 | player),
+  data = dat,
+  family = poisson(),
+  chains = 4, iter = 2000
+)
+
+result_p <- dgt_icc(fit_pois, person_group = "player")
+print(result_p)
+```
+
+
+## The Three-ICC Framework
+
+DGT provides three complementary reliability measures:
+
+| Measure | Question answered | When to use |
+|---|---|---|
+| ICC_Y | How correlated are my observations? | Reporting reliability |
+| ICC_eta | What does classical G-theory say? | Comparison with literature |
+| ICC_I | How much information per observation? | Design decisions |
+
+For Gaussian data, all three are equal. For non-Gaussian data:
+
+- **Lognormal**: ICC_Y < ICC_eta = ICC_I (correlation distortion only)
+- **Poisson**: ICC_I < ICC_eta (genuine information loss)
+- **Hurdle**: ICC_Y < ICC_I < ICC_eta (both problems)
+
+
+## Practical Workflow
+
+```{r}
+# 1. Fit your GLMM in brms
+fit <- brm(...)
+
+# 2. Compute all ICCs
+icc_result <- dgt_icc(fit, person_group = "your_person_var")
+
+# 3. Check overestimation (lognormal only)
+oe <- dgt_overestimation(fit, person_group = "your_person_var")
+
+# 4. Run D-study
+ds <- dgt_dstudy(fit, person_group = "your_person_var")
+plot(ds, target = 0.80)
+
+# 5. Determine required observations
+dgt_required_n(fit, target = 0.80, person_group = "your_person_var")
+
+# 6. For hurdle models: identify the bottleneck
+vd <- dgt_variance(fit, person_group = "your_person_var")
+```
+
+
+## Mathematical Foundation
+
+The package implements six theorems from Distributional Generalizability Theory:
+
+- **Theorem 1**: $\text{ICC}_Y^{\text{LN}} = \frac{\exp(\sigma^2_p)-1}{\exp(\sigma^2_\eta)-1}$
+- **Theorem 1a**: $\text{ICC}_Y < \text{ICC}_\eta$ always (classical G-theory overestimates)
+- **Theorem 2**: D-study = Spearman-Brown with ICC_Y (same formula, different input)
+- **Theorem 3**: Hurdle ICC with five-component variance decomposition
+- **Theorem 5**: $I(\nu; Y) = I(\nu; g(Y))$ — information is invariant under invertible links
+- **Theorem 6**: ICC_Y < ICC_eta = ICC_I, with overestimation unbounded as skewness grows
+
+See the paper: "Distributional Generalizability Theory: Reliability for Non-Gaussian Measurements."
