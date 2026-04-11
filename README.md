@@ -24,9 +24,9 @@ Classical G-theory defines the intraclass correlation coefficient (ICC) as a var
 remotes::install_github("rckaruna/dgt")
 ```
 
-## Quick Start: Lexical Decision Reaction Times
+## Example 1: Lexical Decision Reaction Times
 
-This example uses a person × item crossed design from cognitive psychology — 21 participants classifying 79 English nouns in a lexical decision task. Reaction times are a textbook example of lognormal measurements.
+A person × item crossed design from cognitive psychology — 21 participants classifying 79 English nouns in a lexical decision task. Reaction times are a textbook example of lognormal measurements.
 
 ```r
 library(dgt)
@@ -59,9 +59,63 @@ print(result)
 #   Overestimation (O)              1.018  [1.016, 1.020]
 ```
 
-In this example, the overestimation is small (O = 1.02) because the total log-scale variance is small. For highly skewed measurements — such as batting performance in cricket (O = 1.24) or other noisy behavioral data — the overestimation can exceed 2×.
+In this example, the overestimation is small (O = 1.02) because the total log-scale variance is small (σ²_η ≈ 0.06). Only 7 items are needed for Eρ² ≥ 0.80.
 
-## D-Study: How Many Observations Are Enough?
+## Example 2: T20 Cricket Batting
+
+A multifaceted G-study of ball-by-ball batting performance from the Indian Premier League — 21,740 observations across 165 players. Batting runs per ball are lognormally distributed with large residual variance.
+
+```r
+library(dgt)
+library(brms)
+
+# Load pre-fitted lognormal model (see inst/scripts/fit_cricket.R)
+fit_ln <- readRDS("fit_lognormal.rds")
+
+# Compute all three ICCs
+result <- dgt_icc(fit_ln, person_group = "player")
+print(result)
+
+# --- Distributional Generalizability Theory ---
+# Family: lognormal 
+# ICC Estimates:
+#   ICC_eta (link-scale)            0.009  [0.004, 0.015]
+#   ICC_Y (response-scale)          0.007  [0.003, 0.012]
+#   ICC_I (information)             0.009  [0.004, 0.015]
+#   Overestimation (O)              1.242  [1.237, 1.249]
+
+# Overestimation analysis
+dgt_overestimation(fit_ln, person_group = "player")
+
+# --- DGT Overestimation Analysis ---
+#   Overestimation ratio (O)        1.24x  [ 1.24,  1.25]
+#   D-study ratio (D)               1.24x  [ 1.24,  1.25]
+
+# Required occasions for target reliability
+dgt_required_n(fit_ln, target = 0.80, person_group = "player")
+
+# --- DGT Required Occasions ---
+# Target reliability: 0.8 
+#   n* (link-scale)            460  [ 269,  936]
+#   n* (response-scale)        572  [ 335, 1165]
+```
+
+Here, the overestimation is substantial (O = 1.24) because the total log-scale variance is large (σ²_η ≈ 0.42). Combined with model misspecification (Gaussian ICC = 0.015 vs. correct DGT ICC = 0.007), the total overestimation is 2.2×.
+
+## Contrasting the Two Examples
+
+| | Reaction Times | Cricket Batting |
+|---|---|---|
+| σ²_η (log scale) | 0.06 (small) | 0.42 (large) |
+| ICC_η (link-scale) | 0.400 | 0.009 |
+| ICC_Y (response-scale) | 0.393 | 0.007 |
+| Overestimation O | 1.02× | 1.24× |
+| n* for Eρ² ≥ 0.80 | 7 items | 572 occasions |
+| **Lesson** | DGT correction negligible | DGT correction substantial |
+
+**The key insight:** the correction depends on σ²_η (total log-scale variance), not on the ICC magnitude.
+
+## D-Study
 
 ```r
 # D-study with credible bands
@@ -70,25 +124,6 @@ plot(ds, target = 0.80)
 
 # Minimum observations for target reliability
 dgt_required_n(fit, target = 0.80, person_group = "Subject")
-
-# --- DGT Required Occasions ---
-# Target reliability: 0.8 
-#   n* (link-scale)              6  [   3,   11]
-#   n* (response-scale)          7  [   4,   12]
-```
-
-## Overestimation Analysis
-
-```r
-# Quantify how much classical G-theory overestimates
-oe <- dgt_overestimation(fit, person_group = "Subject")
-print(oe)
-
-# --- DGT Overestimation Analysis ---
-#   Overestimation ratio (O)        1.02x  [ 1.02,  1.02]
-#   D-study ratio (D)               1.03x  [ 1.02,  1.04]
-#   O: Classical ICC is O times the true response-scale ICC.
-#   D: Classical D-study underestimates required occasions by D times.
 ```
 
 ## Information-Theoretic ICC
