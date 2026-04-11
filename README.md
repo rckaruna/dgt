@@ -118,14 +118,13 @@ print(info)
 
 ## Citation
 
-```
-@article{dgt2026,
-  title={Distributional Generalizability Theory: Reliability for Non-Gaussian Measurements},
-  author={Karunanayaka, Ruwan},
-  journal={Psychometrika},
-  year={2026}
-}
-```
+If you use this package, please cite:
+
+> Karunanayaka, R. (2026). Distributional Generalizability Theory: 
+> Reliability for Non-Gaussian Measurements. *Manuscript submitted 
+> to Psychometrika*.
+
+A BibTeX entry will be provided upon publication.
 
 ## License
 
