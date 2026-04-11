@@ -1,20 +1,17 @@
 # dgt: Distributional Generalizability Theory
 
-<!-- badges: start -->
-<!-- badges: end -->
+An R package for computing response-scale reliability from non-Gaussian mixed models. Classical Generalizability Theory assumes Gaussian measurements; `dgt` extends it to lognormal, hurdle, and other GLMM families fitted with [brms](https://paul-buerkner.github.io/brms/).
 
-**dgt** extends classical Generalizability Theory to non-Gaussian measurements. It computes response-scale ICCs, information-theoretic reliability, hurdle model decompositions, and D-study curves from the posterior of any [brms](https://paul-buerkner.github.io/brms/) model.
+## Why DGT?
+
+When measurements are non-Gaussian (reaction times, skewed counts, zero-inflated data), the classical ICC computed on the link scale **overestimates** the true response-scale reliability. `dgt` computes the correct response-scale ICC and tells you how much the classical approach overestimates.
 
 ## Installation
 
 ```r
-# Install from GitHub
+# install.packages("remotes")
 remotes::install_github("rckaruna/dgt")
 ```
-
-## The Problem
-
-Classical G-theory assumes Gaussian measurements. When applied to lognormal data (e.g., expected goals, reaction times), it **overestimates reliability** by up to 3× and **underestimates required sample sizes** by even more. The `dgt` package computes the correct response-scale reliability.
 
 ## Quick Start
 
@@ -24,40 +21,58 @@ library(brms)
 
 # Fit a lognormal model in brms
 fit <- brm(
-  log(xG) ~ 1 + (1 | player_id) + (1 | match_id),
-  data = xg_data,
-  family = gaussian()
+  RT_ms ~ 1 + (1 | Subject) + (1 | Word),
+  data = rt_data,
+  family = lognormal()
 )
 
-# Compute all three ICCs (Theorems 1, 4-5)
-result <- dgt_icc(fit, person_group = "player_id")
+# Compute all three ICCs
+result <- dgt_icc(fit, person_group = "Subject")
 print(result)
 
 # --- Distributional Generalizability Theory ---
-# Family: gaussian
-# 
+# Family: lognormal 
 # ICC Estimates:
-#   ICC_eta (link-scale)             0.086  [0.054, 0.128]
-#   ICC_Y (response-scale)           0.042  [0.024, 0.068]
-#   ICC_I (information)              0.086  [0.054, 0.128]
-#   Overestimation (O)               2.05   [1.72, 2.48]
+#   ICC_eta (link-scale)            0.400  [0.267, 0.578]
+#   ICC_Y (response-scale)          0.393  [0.262, 0.568]
+#   ICC_I (information)             0.400  [0.267, 0.578]
+#   Overestimation (O)              1.018  [1.016, 1.020]
 ```
 
 ## D-Study
 
 ```r
-# D-study with credible bands (Theorems 2a, 2b)
-ds <- dgt_dstudy(fit, n_grid = 1:50, person_group = "player_id")
+# D-study with credible bands
+ds <- dgt_dstudy(fit, n_grid = 1:200, person_group = "Subject")
 plot(ds, target = 0.80)
 
 # Required occasions
-dgt_required_n(fit, target = 0.80, person_group = "player_id")
+dgt_required_n(fit, target = 0.80, person_group = "Subject")
 
 # --- DGT Required Occasions ---
-# Target reliability: 0.8
-# 
-#   n* (link-scale)           43  [  30,   62]
-#   n* (response-scale)       92  [  56,  160]
+# Target reliability: 0.8 
+#   n* (link-scale)              6  [   3,   11]
+#   n* (response-scale)          7  [   4,   12]
+```
+
+## Overestimation Analysis
+
+```r
+# How wrong is classical G-theory?
+oe <- dgt_overestimation(fit, person_group = "Subject")
+print(oe)
+
+# --- DGT Overestimation Analysis ---
+#   Overestimation ratio (O)        1.02x  [ 1.02,  1.02]
+#   D-study ratio (D)               1.03x  [ 1.02,  1.04]
+```
+
+## Information ICC
+
+```r
+# Information-theoretic reliability
+info <- dgt_info_icc(fit, person_group = "Subject")
+print(info)
 ```
 
 ## Hurdle Models
@@ -65,60 +80,41 @@ dgt_required_n(fit, target = 0.80, person_group = "player_id")
 ```r
 # Fit a hurdle-lognormal model
 fit_hurdle <- brm(
-  bf(xG ~ 1 + (1 | player_id), hu ~ 1 + (1 | player_id)),
-  data = xg_data,
+  bf(drinks ~ 1 + (1 | person_id), hu ~ 1 + (1 | person_id)),
+  data = daily_data,
   family = hurdle_lognormal()
 )
 
-# Three-part reliability decomposition (Theorem 3)
-result <- dgt_icc(fit_hurdle, person_group = "player_id")
+# Three-part reliability decomposition
+result <- dgt_icc(fit_hurdle, person_group = "person_id")
 print(result)
 
 # Five-component variance decomposition
-vd <- dgt_variance(fit_hurdle, person_group = "player_id")
+vd <- dgt_variance(fit_hurdle, person_group = "person_id")
 print(vd)
-```
-
-## Overestimation Analysis
-
-```r
-# How wrong is classical G-theory? (Theorem 6)
-oe <- dgt_overestimation(fit, person_group = "player_id")
-print(oe)
-
-# --- DGT Overestimation Analysis (Theorem 6) ---
-# 
-#   Overestimation ratio (O)         2.05x  [ 1.72,  2.48]
-#   D-study ratio (D)                2.31x  [ 1.88,  2.91]
-# 
-#   Interpretation:
-#     O: Classical ICC is O times the true response-scale ICC.
-#     D: Classical D-study underestimates required occasions by D times.
-#     D > O always (Proposition 15).
-```
-
-## Information ICC
-
-```r
-# Information-theoretic reliability (Theorems 4-5)
-info <- dgt_info_icc(fit, person_group = "player_id")
-print(info)
 ```
 
 ## Key Results
 
 | Theorem | What it says | Function |
-|---|---|---|
-| **1** | Lognormal ICC_Y = (exp(σ²_p)-1)/(exp(σ²_η)-1) | `dgt_icc()` |
-| **1a** | ICC_Y < ICC_η always | `dgt_overestimation()` |
-| **2** | D-study = Spearman-Brown(ICC_Y) | `dgt_dstudy()` |
-| **3** | Hurdle composite ICC with 5-component decomposition | `dgt_icc()`, `dgt_variance()` |
-| **5** | ICC_I = ICC_η for invertible links | `dgt_info_icc()` |
-| **6** | ICC_Y < ICC_η = ICC_I; D > O > 1 | `dgt_overestimation()` |
+|---------|-------------|----------|
+| 1 | Lognormal ICC_Y = (exp(σ²_p)-1)/(exp(σ²_η)-1) | `dgt_icc()` |
+| 1a | ICC_Y < ICC_η always | `dgt_overestimation()` |
+| 2 | D-study = Spearman-Brown(ICC_Y) | `dgt_dstudy()` |
+| 3 | Hurdle composite ICC with 5-component decomposition | `dgt_icc()`, `dgt_variance()` |
+| 5 | ICC_I = ICC_η for invertible links | `dgt_info_icc()` |
+| 6 | ICC_Y < ICC_η = ICC_I; D > O > 1 | `dgt_overestimation()` |
 
-## Citation
+## Functions
 
---
+| Function | Description |
+|----------|-------------|
+| `dgt_icc()` | Response-scale, link-scale, and information ICCs |
+| `dgt_dstudy()` | D-study curves with credible bands (+ `plot()`) |
+| `dgt_required_n()` | Required occasions for target reliability |
+| `dgt_overestimation()` | Overestimation and D-study ratios |
+| `dgt_info_icc()` | Mutual information and information ICC |
+| `dgt_variance()` | Five-component hurdle variance decomposition |
 
 ## License
 
