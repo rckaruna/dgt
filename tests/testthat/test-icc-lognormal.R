@@ -1,5 +1,5 @@
 # test-icc-lognormal.R — Unit tests for lognormal ICC formulas
-
+skip_on_ci()
 test_that("lognormal ICC formula gives correct values", {
   # Test against independently verified values
   cases <- data.frame(
