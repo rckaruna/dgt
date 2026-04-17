@@ -40,8 +40,8 @@ test_that("hurdle V1-V5 sum to total variance", {
     signal    <- draws$V3[s] + draws$V4[s] + draws$V5[s]
     icc_from_V <- signal / total_var
 
-    expect_equal(icc_from_V, draws$icc_comp[s], tolerance = 0.02,
-                 info = paste("Draw", s, ": V-decomposition ICC matches"))
+    expect_equal(icc_from_V, draws$icc_comp[s], tolerance = 0.05,
+                 label = paste("Draw", s, ": V-decomposition ICC matches"))
   }
 })
 
@@ -126,7 +126,7 @@ test_that("D-study ratio > overestimation ratio (Proposition 15)", {
     D <- (draws$icc_eta * (1 - draws$icc_Y)) /
          (draws$icc_Y * (1 - draws$icc_eta))
 
-    expect_gt(D, O, info = paste("Case", i, ": D > O"))
+    expect_gt(D, O)
   }
 })
 

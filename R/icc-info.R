@@ -5,12 +5,15 @@
 #' Computes the information ICC based on mutual information between
 #' person identity and observation. For lognormal models, this equals
 #' the link-scale ICC (by transformation invariance, Theorem 5).
-#' For discrete or hurdle models, it is computed via Monte Carlo
-#' entropy estimation and is strictly less than the link-scale ICC
-#' (Theorem 5a).
+#' For discrete (Bernoulli, binomial, Poisson) or hurdle models, it is
+#' computed via Monte Carlo entropy estimation and is strictly less than
+#' the link-scale ICC (Theorem 5a).
 #'
 #' @param fit A brms model fit object.
-#' @param person_group Character. Person grouping factor.
+#' @param person_group Character. The grouping factor that is the object
+#'   of measurement. Works generically for any random-effect level in the
+#'   fit, not only person-level; passing \code{"item_id"} makes items the
+#'   object and treats the person random effect and residual as error.
 #' @param K Integer. Simulated persons per draw. Default 2000.
 #' @param M Integer. Replicate observations per person (discrete/hurdle).
 #'   Default 500.
@@ -29,9 +32,13 @@
 #' \deqn{I(\nu_p; Y) = \frac{1}{2}\ln(\sigma^2_\eta / \sigma^2_e)}
 #' and \eqn{\text{ICC}_I = 1 - \exp(-2I) = \sigma^2_p / \sigma^2_\eta = \text{ICC}_\eta}.
 #'
-#' For discrete models (Poisson, binomial) or hurdle models, the mutual
-#' information must be estimated via Monte Carlo. This is computationally
-#' expensive and the analytic shortcut should be preferred when available.
+#' For discrete models (Bernoulli, binomial, Poisson) and hurdle models,
+#' the mutual information is estimated via nested Monte Carlo: an outer
+#' draw over the object random effect, an inner draw over the facet
+#' random effect, producing a posterior-averaged estimate of
+#' \eqn{I(\nu_p; Y)}. The information ICC is strictly less than the
+#' link-scale ICC in these cases, reflecting the data processing
+#' inequality applied to the discrete sampling step.
 #'
 #' @export
 dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
@@ -113,6 +120,57 @@ dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
         .posterior_summary(I_intensity, probs),
         .posterior_summary(I_total, probs),
         .posterior_summary(icc_I, probs)
+      )
+    )
+    rownames(summary_df) <- NULL
+    method <- "monte_carlo"
+
+  } else if (family %in% c("bernoulli", "binomial")) {
+    # --- Bernoulli/binomial: nested Monte Carlo over object and facet ---
+    # By Theorem 6 (discrete information loss), ICC_I < ICC_eta strictly.
+    bern <- .icc_bernoulli_info_draws(fit, person_group, K = K)
+
+    draws <- data.frame(
+      I_val   = bern$I,
+      icc_I   = bern$icc_I,
+      icc_eta = bern$icc_eta,
+      gap     = bern$icc_eta - bern$icc_I
+    )
+
+    summary_df <- data.frame(
+      measure = c("I(nu; Y) (mutual information, nats)",
+                  "ICC_I (information)", "ICC_eta (logit-scale)",
+                  "Gap (ICC_eta - ICC_I)"),
+      rbind(
+        .posterior_summary(draws$I_val, probs),
+        .posterior_summary(draws$icc_I, probs),
+        .posterior_summary(draws$icc_eta, probs),
+        .posterior_summary(draws$gap, probs)
+      )
+    )
+    rownames(summary_df) <- NULL
+    method <- "monte_carlo"
+
+  } else if (family == "poisson") {
+    # --- Poisson: Monte Carlo over log-rate ---
+    pois <- .icc_poisson_info_draws(fit, person_group, K = K)
+
+    draws <- data.frame(
+      I_val   = pois$I,
+      icc_I   = pois$icc_I,
+      icc_eta = pois$icc_eta,
+      gap     = pois$icc_eta - pois$icc_I
+    )
+
+    summary_df <- data.frame(
+      measure = c("I(nu; Y) (mutual information, nats)",
+                  "ICC_I (information)", "ICC_eta (log-scale)",
+                  "Gap (ICC_eta - ICC_I)"),
+      rbind(
+        .posterior_summary(draws$I_val, probs),
+        .posterior_summary(draws$icc_I, probs),
+        .posterior_summary(draws$icc_eta, probs),
+        .posterior_summary(draws$gap, probs)
       )
     )
     rownames(summary_df) <- NULL

@@ -15,6 +15,7 @@
 #'
 #' @return A ggplot2 object.
 #'
+#' @importFrom rlang .data
 #' @export
 plot.dgt_dstudy <- function(x, target = 0.80, ...) {
 
@@ -58,6 +59,7 @@ plot.dgt_dstudy <- function(x, target = 0.80, ...) {
 #'
 #' @return A ggplot2 object.
 #'
+#' @importFrom rlang .data
 #' @export
 plot.dgt_icc <- function(x, ...) {
 

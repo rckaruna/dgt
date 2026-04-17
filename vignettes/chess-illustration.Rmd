@@ -1,0 +1,246 @@
+---
+title: "Illustration: The Amsterdam Chess Test"
+author: "Ruwan Karunanayaka"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Illustration: The Amsterdam Chess Test}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, collapse = TRUE, comment = "#>")
+```
+
+## Overview
+
+This vignette reproduces the Amsterdam Chess Test illustration from
+Section 8.2 of Karunanayaka (2026). The analysis demonstrates three
+features of the DGT framework on a single psychometric instrument:
+
+1. Response-scale attenuation for lognormal response times
+   (Theorem 1 of the paper).
+2. Information loss under Bernoulli sampling for item accuracy
+   (Theorem 5).
+3. The three-ICC ordering applied to both objects of measurement
+   (persons and items) on the same test (Theorem 6).
+
+The dataset is `AmsterdamChess` from the **LNIRT** package: 259 chess
+players responding to 40 chess-tactics items, with both response times
+(seconds) and correctness scores (0/1). It was collected by van der
+Maas and Wagenmakers (2005) and is distributed under an open license.
+
+## Preparation
+
+```{r}
+library(LNIRT)
+library(brms)
+library(dgt)
+library(dplyr)
+library(tidyr)
+
+data(AmsterdamChess)
+act <- AmsterdamChess
+```
+
+Three participants (rows 147, 201, 209) have no recorded responses and
+are dropped. Missing response times are coded 10000 and missing
+accuracy scores are coded 9; both are recoded to `NA`.
+
+```{r}
+rt_cols <- grep("^RT([0-9]+)$", names(act), value = TRUE)
+y_cols  <- grep("^Y([0-9]+)$",  names(act), value = TRUE)
+
+rt_wide <- act[, rt_cols]; rt_wide[rt_wide == 10000] <- NA
+y_wide  <- act[, y_cols];  y_wide[y_wide  == 9]     <- NA
+
+keep <- !apply(rt_wide, 1, function(r) all(is.na(r)))
+rt_wide <- rt_wide[keep, ]
+y_wide  <- y_wide[keep, ]
+```
+
+Reshape to long format with explicit `person_id` and `item_id`
+grouping factors:
+
+```{r}
+rt_long <- rt_wide |>
+  as.data.frame() |>
+  mutate(person_id = factor(seq_len(nrow(rt_wide)))) |>
+  pivot_longer(all_of(rt_cols), names_to = "item_id",
+               values_to = "rt_sec") |>
+  filter(!is.na(rt_sec), rt_sec > 0) |>
+  mutate(item_id = factor(item_id, levels = rt_cols),
+         log_rt  = log(rt_sec))
+
+y_long <- y_wide |>
+  as.data.frame() |>
+  mutate(person_id = factor(seq_len(nrow(y_wide)))) |>
+  pivot_longer(all_of(y_cols), names_to = "item_id",
+               values_to = "correct") |>
+  filter(!is.na(correct)) |>
+  mutate(item_id = factor(item_id, levels = y_cols),
+         correct = as.integer(correct))
+```
+
+## Response-time model
+
+Fit a lognormal crossed random-effects model:
+
+```{r}
+rt_fit <- brm(
+  log_rt ~ 1 + (1 | person_id) + (1 | item_id),
+  data   = rt_long,
+  family = gaussian(),
+  prior  = c(prior(normal(4, 2),       class = "Intercept"),
+             prior(student_t(3, 0, 1), class = "sd"),
+             prior(student_t(3, 0, 1), class = "sigma")),
+  chains = 4, cores = 4, iter = 4000, warmup = 1000,
+  seed   = 20260418, backend = "cmdstanr"
+)
+```
+
+### DGT quantities with persons as object
+
+```{r}
+icc_rt_person <- dgt_icc(rt_fit, person_group = "person_id")
+print(icc_rt_person)
+```
+
+Expected output (medians, 95% CIs):
+
+```
+ICC_eta (link-scale)        0.173  [0.133, 0.216]
+ICC_Y   (response-scale)    0.136  [0.097, 0.176]
+ICC_I   (information)       0.173  [0.133, 0.216]
+Overestimation (O)          1.28   [1.22, 1.39]
+```
+
+### DGT quantities with items as object
+
+Pass `person_group = "item_id"` to treat items as the object of
+measurement. The helper is generic in the grouping factor: whatever
+random effect is named there becomes the signal, and all other
+random effects plus the residual become error.
+
+```{r}
+icc_rt_item <- dgt_icc(rt_fit, person_group = "item_id")
+print(icc_rt_item)
+```
+
+Expected:
+
+```
+ICC_eta                     0.426  [0.324, 0.546]
+ICC_Y                       0.358  [0.273, 0.458]
+ICC_I                       0.426  [0.324, 0.546]
+Overestimation (O)          1.19   [1.18, 1.20]
+```
+
+Because the lognormal model has an invertible deterministic link
+(\eqn{W = \log Y}), Theorem 5 (transformation invariance) gives
+\eqn{\icc_I = \icc_\eta} exactly for both objects. The response-scale
+ICC is strictly lower than the link-scale ICC, and in both rows the
+95% credible interval for the overestimation ratio excludes 1.
+
+### D-study
+
+```{r}
+dgt_required_n(rt_fit, target = 0.80, person_group = "person_id")
+#> n* (link-scale)   21
+#> n* (response-scale)  26
+
+dgt_required_n(rt_fit, target = 0.80, person_group = "item_id")
+#> n* (link-scale)   6
+#> n* (response-scale)  8
+```
+
+## Accuracy model
+
+Fit a Bernoulli crossed random-effects model to the 0/1 correctness
+data:
+
+```{r}
+acc_fit <- brm(
+  correct ~ 1 + (1 | person_id) + (1 | item_id),
+  data   = y_long,
+  family = bernoulli(link = "logit"),
+  prior  = c(prior(normal(0, 2),       class = "Intercept"),
+             prior(student_t(3, 0, 1), class = "sd")),
+  chains = 4, cores = 4, iter = 4000, warmup = 1000,
+  seed   = 20260418, backend = "cmdstanr"
+)
+```
+
+### Information loss under Bernoulli sampling
+
+New in `dgt` 0.2.0: `dgt_info_icc()` now handles Bernoulli and
+binomial families. The function estimates
+\eqn{I(\nu_{\mathrm{obj}}; Y)} by nested Monte Carlo and returns the
+information ICC, the logit-scale ICC, and their gap. By Theorem 5 the
+gap is strictly positive.
+
+```{r}
+info_acc_person <- dgt_info_icc(acc_fit, person_group = "person_id")
+print(info_acc_person)
+```
+
+Expected:
+
+```
+I(nu; Y) (mutual information, nats)     0.056  [0.039, 0.074]
+ICC_I   (information)                    0.105  [0.076, 0.138]
+ICC_eta (logit-scale)                    0.160  [0.118, 0.205]
+Gap (ICC_eta - ICC_I)                    0.055  [0.038, 0.074]
+```
+
+```{r}
+info_acc_item <- dgt_info_icc(acc_fit, person_group = "item_id")
+print(info_acc_item)
+```
+
+Expected:
+
+```
+I(nu; Y) (mutual information, nats)     0.189  [0.143, 0.249]
+ICC_I                                    0.315  [0.248, 0.392]
+ICC_eta                                  0.480  [0.381, 0.596]
+Gap                                      0.165  [0.122, 0.212]
+```
+
+The information loss is substantial in both cases: about a third of
+the logit-scale between-object variance is structurally unrecoverable
+from the discrete 0/1 observations, consistent with the data
+processing inequality applied to the Bernoulli sampling step.
+
+## Interpretation
+
+The ACT illustrates all parts of Theorem 6 on a single instrument:
+
+- Response times: `ICC_Y < ICC_eta = ICC_I` for both persons and
+  items (Theorem 6(a), continuous invertible link).
+- Accuracy: `ICC_I < ICC_eta` for both persons and items (Theorem
+  6(b), discrete sampling).
+
+The contrast with the lexical decision illustration (Section 8.1 of
+the paper) is instructive. Lexical decision RTs have
+\eqn{\sigma^2_\eta \approx 0.12} and \eqn{\mathcal{O} \approx 1.02}:
+the response-scale correction is negligible because the total
+log-scale variance is small. Chess RTs have
+\eqn{\sigma^2_\eta = 0.56} and \eqn{\mathcal{O} = 1.28}: the
+correction is meaningful. The correction magnitude depends on total
+log-scale variance, not on the ICC itself.
+
+## References
+
+Fox, J.-P., Klotzke, K., & Simsek, A. S. (2023). R-package LNIRT for
+joint modeling of response accuracy and times. *PeerJ Computer
+Science*, 9, e1232.
+
+Karunanayaka, R. (2026). Distributional Generalizability Theory:
+Reliability for Non-Gaussian Measurements. *Psychometrika*,
+forthcoming.
+
+van der Maas, H. L. J., & Wagenmakers, E.-J. (2005). A psychometric
+analysis of chess expertise. *American Journal of Psychology*,
+118(1), 29–60.

@@ -7,11 +7,10 @@
 #' proportions (Y/n_trials) and for counts (Y).
 #'
 #' For proportions:
-#'   ICC_Y = Var(pi_p) / (E[pi(1-pi)]/n_trials + Var(pi_p))
+#'   \eqn{\mathrm{ICC}_Y = \mathrm{Var}(\pi_p) / (\mathrm{E}[\pi(1-\pi)]/n + \mathrm{Var}(\pi_p))}.
 #'
 #' For counts:
-#'   ICC_Y = n^2 Var(pi) / (n E[pi(1-pi)] + n^2 Var(pi))
-#'        = n Var(pi) / (E[pi(1-pi)] + n Var(pi))
+#'   \eqn{\mathrm{ICC}_Y = n \mathrm{Var}(\pi) / (\mathrm{E}[\pi(1-\pi)] + n \mathrm{Var}(\pi))}.
 #'
 #' As n_trials -> Inf, ICC_Y -> 1 (proportion becomes perfectly reliable).
 #' As n_trials = 1 (single Bernoulli), this reduces to the engagement ICC.
@@ -86,4 +85,90 @@
     icc_Y = icc_Y,
     icc_I = icc_I
   )
+}
+
+
+#' Compute Bernoulli/binomial information ICC draws
+#'
+#' Nested Monte Carlo estimator of I(nu_obj; Y) for a Bernoulli or
+#' binomial GLMM with logit link and crossed random effects. Returns
+#' draw-by-draw estimates of the information ICC and the
+#' link-scale ICC (using the pi^2/3 logistic-residual convention).
+#'
+#' @param fit A brms model fit (bernoulli or binomial family).
+#' @param person_group Character. The grouping factor that is the object
+#'   of measurement. Any other random effect is treated as a facet whose
+#'   effect is integrated out via an inner Monte Carlo draw.
+#' @param K Integer. Number of outer draws (object random effects) per
+#'   posterior sample. Default 500.
+#' @param K_facet Integer. Number of inner draws (facet random effects)
+#'   per outer draw. Default 500.
+#' @return List with numeric vectors I, icc_I, icc_eta, one entry per
+#'   posterior draw.
+#' @keywords internal
+.icc_bernoulli_info_draws <- function(fit, person_group = NULL,
+                                      K = 500, K_facet = 500) {
+  post <- posterior::as_draws_df(fit)
+
+  if (is.null(person_group)) {
+    re_names <- names(brms::ranef(fit))
+    person_group <- re_names[1]
+    message("Using '", person_group, "' as the object grouping factor.")
+  }
+
+  re_names <- names(brms::ranef(fit))
+  other_re <- setdiff(re_names, person_group)
+
+  sd_obj_col <- paste0("sd_", person_group, "__Intercept")
+  if (!sd_obj_col %in% names(post)) {
+    stop("Cannot find object SD column '", sd_obj_col, "' in posterior draws.")
+  }
+  sd_obj <- as.numeric(post[[sd_obj_col]])
+
+  # Sum of other random-effect SDs (treated as a single facet for MC)
+  sd_facet <- rep(0, nrow(post))
+  for (re in other_re) {
+    col <- paste0("sd_", re, "__Intercept")
+    if (col %in% names(post)) {
+      sd_facet <- sqrt(sd_facet^2 + as.numeric(post[[col]])^2)
+    }
+  }
+
+  alpha <- as.numeric(post[["b_Intercept"]])
+  S     <- length(alpha)
+
+  logit_resid_var <- pi^2 / 3
+
+  I_vals  <- numeric(S)
+  icc_I   <- numeric(S)
+  icc_eta <- numeric(S)
+
+  H_bern <- function(p) {
+    p <- pmin(pmax(p, 1e-12), 1 - 1e-12)
+    -p * log(p) - (1 - p) * log(1 - p)
+  }
+
+  for (s in seq_len(S)) {
+    a  <- alpha[s]
+    so <- sd_obj[s]
+    sf <- sd_facet[s]
+
+    u      <- stats::rnorm(K, 0, so)
+    p_cond <- numeric(K)
+    for (k in seq_len(K)) {
+      v         <- stats::rnorm(K_facet, 0, sf)
+      p_cond[k] <- mean(stats::plogis(a + u[k] + v))
+    }
+
+    p_marg      <- mean(p_cond)
+    H_Y         <- H_bern(p_marg)
+    H_Y_given_u <- mean(H_bern(p_cond))
+
+    I_val      <- max(H_Y - H_Y_given_u, 0)
+    I_vals[s]  <- I_val
+    icc_I[s]   <- 1 - exp(-2 * I_val)
+    icc_eta[s] <- so^2 / (so^2 + sf^2 + logit_resid_var)
+  }
+
+  list(I = I_vals, icc_I = icc_I, icc_eta = icc_eta)
 }

@@ -33,22 +33,26 @@
 #' @keywords internal
 .dstudy_lognormal_draws <- function(vc, n_grid = 1:50) {
   icc_Y <- (exp(vc$s2p) - 1) / (exp(vc$s2eta) - 1)
+  S <- length(icc_Y)
 
   # Arithmetic mean: Spearman-Brown with response ICC (Theorem 2a)
   arith <- sapply(n_grid, function(nm) {
     nm * icc_Y / (1 + (nm - 1) * icc_Y)
   })
+  if (!is.matrix(arith)) arith <- matrix(arith, nrow = S)
 
   # Geometric mean: non-Spearman-Brown (Theorem 2b)
   geom <- sapply(n_grid, function(nm) {
     (exp(vc$s2p) - 1) / (exp(vc$s2p + vc$s2e / nm) - 1)
   })
+  if (!is.matrix(geom)) geom <- matrix(geom, nrow = S)
 
   # Link-scale (classical): Spearman-Brown with link ICC
   icc_eta <- vc$s2p / vc$s2eta
   link <- sapply(n_grid, function(nm) {
     nm * icc_eta / (1 + (nm - 1) * icc_eta)
   })
+  if (!is.matrix(link)) link <- matrix(link, nrow = S)
 
   list(arith = arith, geom = geom, link = link)
 }
