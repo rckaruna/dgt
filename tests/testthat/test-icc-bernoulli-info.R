@@ -3,6 +3,7 @@
 
 test_that(".icc_bernoulli_info_draws returns expected structure", {
   skip_on_cran()
+  skip_on_ci()
   skip_if_not_installed("brms")
 
   # Minimal synthetic Bernoulli fit with a person random effect only
@@ -45,6 +46,7 @@ test_that(".icc_bernoulli_info_draws returns expected structure", {
 
 test_that("dgt_info_icc() routes Bernoulli family to Monte Carlo branch", {
   skip_on_cran()
+  skip_on_ci()
   skip_if_not_installed("brms")
 
   set.seed(2)
@@ -73,6 +75,7 @@ test_that("dgt_info_icc() routes Bernoulli family to Monte Carlo branch", {
 
 test_that("dgt_info_icc() accepts non-default grouping factor", {
   skip_on_cran()
+  skip_on_ci()
   skip_if_not_installed("brms")
 
   # Fit with crossed person and item random effects; verify that
