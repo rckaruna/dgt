@@ -63,4 +63,9 @@ Useful links:
 \author{
 \strong{Maintainer}: Ruwan Karunanayaka \email{ruwan.karunanayaka@ufv.ca} (\href{https://orcid.org/0009-0008-2459-1569}{ORCID})
 
+Authors:
+\itemize{
+  \item Ruwan Karunanayaka \email{ruwan.karunanayaka@ufv.ca} (\href{https://orcid.org/0009-0008-2459-1569}{ORCID})
+}
+
 }
