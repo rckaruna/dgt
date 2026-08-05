@@ -1,6 +1,6 @@
 Package: dgt
 Title: Distributional Generalizability Theory
-Version: 0.2.0
+Version: 0.2.1
 Authors@R: 
     person("Ruwan", "Karunanayaka", email = "ruwan.karunanayaka@ufv.ca", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0008-2459-1569"))

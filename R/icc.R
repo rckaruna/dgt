@@ -39,7 +39,32 @@
 #' }
 #'
 #' @export
-dgt_icc <- function(fit, person_group = NULL, K = 5000,
+
+# Build the response-scale summary rows for the discrete families,
+# reporting relative and absolute coefficients separately whenever a
+# crossed facet is present (added v0.2.1).
+.discrete_summary <- function(draws, probs, label) {
+  if ("icc_Y_abs" %in% names(draws)) {
+    data.frame(
+      measure = c(paste0("ICC_Y ", label, ", relative"),
+                  paste0("ICC_Y ", label, ", absolute"),
+                  "ICC_I (information)"),
+      rbind(.posterior_summary(draws$icc_Y_rel, probs),
+            .posterior_summary(draws$icc_Y_abs, probs),
+            .posterior_summary(draws$icc_I, probs)),
+      row.names = NULL
+    )
+  } else {
+    data.frame(
+      measure = c(paste0("ICC_Y ", label), "ICC_I (information)"),
+      rbind(.posterior_summary(draws$icc_Y, probs),
+            .posterior_summary(draws$icc_I, probs)),
+      row.names = NULL
+    )
+  }
+}
+
+dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
                     probs = c(0.025, 0.975), seed = NULL) {
 
   family <- .detect_family(fit)
@@ -107,16 +132,7 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000,
 
   } else if (family == "poisson") {
     draws <- .icc_poisson_draws(fit, person_group, K = K)
-
-    summary_df <- data.frame(
-      measure = c("ICC_Y (response-scale, counts)",
-                  "ICC_I (information)"),
-      rbind(
-        .posterior_summary(draws$icc_Y, probs),
-        .posterior_summary(draws$icc_I, probs)
-      )
-    )
-    rownames(summary_df) <- NULL
+    summary_df <- .discrete_summary(draws, probs, "(response-scale, counts)")
 
     result <- list(
       family   = family,
@@ -126,17 +142,8 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000,
     )
 
   } else if (family %in% c("binomial", "bernoulli")) {
-    draws <- .icc_binomial_draws(fit, person_group, K = K)
-
-    summary_df <- data.frame(
-      measure = c("ICC_Y (response-scale)",
-                  "ICC_I (information)"),
-      rbind(
-        .posterior_summary(draws$icc_Y, probs),
-        .posterior_summary(draws$icc_I, probs)
-      )
-    )
-    rownames(summary_df) <- NULL
+    draws <- .icc_binomial_draws(fit, person_group, n_trials = n_trials, K = K)
+    summary_df <- .discrete_summary(draws, probs, "(response-scale)")
 
     result <- list(
       family   = family,
