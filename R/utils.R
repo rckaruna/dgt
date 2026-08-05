@@ -205,3 +205,35 @@
   if (!is.numeric(v) || length(unique(v)) != 1L) return(NULL)
   as.integer(v[1])
 }
+
+
+#' Build response-scale summary rows for the discrete families
+#'
+#' Reports relative and absolute coefficients separately whenever a
+#' crossed facet is present (added v0.2.1).
+#'
+#' @param draws Data frame of per-draw ICC values.
+#' @param probs Numeric. Credible interval probabilities.
+#' @param label Character. Measure label.
+#' @return A data frame of summary rows.
+#' @keywords internal
+.discrete_summary <- function(draws, probs, label) {
+  if ("icc_Y_abs" %in% names(draws)) {
+    data.frame(
+      measure = c(paste0("ICC_Y ", label, ", relative"),
+                  paste0("ICC_Y ", label, ", absolute"),
+                  "ICC_I (information)"),
+      rbind(.posterior_summary(draws$icc_Y_rel, probs),
+            .posterior_summary(draws$icc_Y_abs, probs),
+            .posterior_summary(draws$icc_I, probs)),
+      row.names = NULL
+    )
+  } else {
+    data.frame(
+      measure = c(paste0("ICC_Y ", label), "ICC_I (information)"),
+      rbind(.posterior_summary(draws$icc_Y, probs),
+            .posterior_summary(draws$icc_I, probs)),
+      row.names = NULL
+    )
+  }
+}

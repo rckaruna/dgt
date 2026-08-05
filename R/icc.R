@@ -16,6 +16,8 @@
 #' @param fit A brms model fit object.
 #' @param person_group Character. Name of the person-level grouping factor.
 #'   If NULL (default), uses the first random effect.
+#' @param n_trials Integer. Binomial trials per observation. If NULL,
+#'   detected from the model where possible.
 #' @param K Integer. Number of simulated persons per posterior draw
 #'   (hurdle models only). Default 5000.
 #' @param probs Numeric vector of length 2. Quantile probabilities for
@@ -39,30 +41,6 @@
 #' }
 #'
 #' @export
-
-# Build the response-scale summary rows for the discrete families,
-# reporting relative and absolute coefficients separately whenever a
-# crossed facet is present (added v0.2.1).
-.discrete_summary <- function(draws, probs, label) {
-  if ("icc_Y_abs" %in% names(draws)) {
-    data.frame(
-      measure = c(paste0("ICC_Y ", label, ", relative"),
-                  paste0("ICC_Y ", label, ", absolute"),
-                  "ICC_I (information)"),
-      rbind(.posterior_summary(draws$icc_Y_rel, probs),
-            .posterior_summary(draws$icc_Y_abs, probs),
-            .posterior_summary(draws$icc_I, probs)),
-      row.names = NULL
-    )
-  } else {
-    data.frame(
-      measure = c(paste0("ICC_Y ", label), "ICC_I (information)"),
-      rbind(.posterior_summary(draws$icc_Y, probs),
-            .posterior_summary(draws$icc_I, probs)),
-      row.names = NULL
-    )
-  }
-}
 
 dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
                     probs = c(0.025, 0.975), seed = NULL) {
