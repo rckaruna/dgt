@@ -12,6 +12,10 @@
   first `n` reaching 0.70, 0.80, and 0.90 on each scale.
 * New arguments `K_facet` and `info` on `dgt_dstudy()`; existing
   behaviour for lognormal and hurdle families is unchanged.
+* Vignette `introduction`: new Example 4, a decision study for a
+  paired-choice DCE (Bernoulli), showing link-scale and response-scale
+  required task counts from one fit; install line now points at
+  `rckaruna/dgt`.
 * New internal routines `.dstudy_bernoulli_draws()` (pure computation,
   testable without brms) and `.extract_varcomps_bernoulli()` (mirrors the
   extraction in `.icc_bernoulli_info_draws()`).
