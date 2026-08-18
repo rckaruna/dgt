@@ -1,6 +1,6 @@
 Package: dgt
 Title: Distributional Generalizability Theory
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: 
     person("Ruwan", "Karunanayaka", email = "ruwan.karunanayaka@ufv.ca", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0008-2459-1569"))
@@ -15,7 +15,6 @@ URL: https://github.com/rckaruna/dgt
 BugReports: https://github.com/rckaruna/dgt/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Depends: R (>= 4.1.0)
 Imports:
     brms (>= 2.19.0),
@@ -32,3 +31,4 @@ Suggests:
     tidyr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0

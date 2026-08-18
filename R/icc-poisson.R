@@ -18,17 +18,48 @@
 .icc_poisson_draws <- function(fit, person_group = NULL, K = 5000) {
   post <- posterior::as_draws_df(fit)
 
-  if (is.null(person_group)) {
-    re_names <- names(brms::ranef(fit))
-    person_group <- re_names[1]
-    message("Using '", person_group, "' as person grouping factor.")
-  }
-
-  sd_col <- paste0("sd_", person_group, "__Intercept")
-  sigma_p <- as.numeric(post[[sd_col]])
+  re <- .extract_re_sds(fit, person_group)
+  person_group <- re$person_group
+  sigma_p <- re$sd_obj
+  sd_facet <- re$sd_facet
   mu <- as.numeric(post[["b_Intercept"]])
   s2p <- sigma_p^2
+  s2f <- sd_facet^2
   S <- length(mu)
+
+  # With a crossed facet the log-normal mixture gives closed forms for
+  # every component, so no simulation is needed for the response scale.
+  # Writing lambda = exp(mu + u + v), the object universe score is
+  # E_v[lambda | u] = exp(mu + u + s2f/2), and
+  #   var_obj   = exp(2mu + s2f + s2p)(exp(s2p) - 1)
+  #   var_facet = exp(2mu + s2p + s2f)(exp(s2f) - 1)
+  #   var_int   = exp(2mu + s2p + s2f)(exp(s2p) - 1)(exp(s2f) - 1)
+  # and the Poisson sampling variance is E[lambda]. Setting s2f = 0
+  # recovers the pre-0.2.1 formulas exactly.
+  if (any(sd_facet > 0)) {
+    base    <- exp(2 * mu + s2p + s2f)
+    E_lam   <- exp(mu + (s2p + s2f) / 2)
+    v_obj   <- base * (exp(s2p) - 1)
+    v_facet <- base * (exp(s2f) - 1)
+    v_int   <- base * (exp(s2p) - 1) * (exp(s2f) - 1)
+
+    icc_rel <- v_obj / (v_obj + v_int + E_lam)
+    icc_abs <- v_obj / (v_obj + v_facet + v_int + E_lam)
+
+    icc_I <- numeric(S)
+    for (s in seq_len(S)) {
+      icc_I[s] <- .poisson_info_facet(mu[s], sigma_p[s], sd_facet[s])
+    }
+
+    return(data.frame(icc_Y      = icc_rel,
+                      icc_Y_rel  = icc_rel,
+                      icc_Y_abs  = icc_abs,
+                      icc_I      = icc_I,
+                      var_obj    = v_obj,
+                      var_facet  = v_facet,
+                      var_int    = v_int,
+                      E_lambda   = E_lam))
+  }
 
   icc_Y <- numeric(S)
   icc_I <- numeric(S)
@@ -184,4 +215,36 @@
   }
 
   list(I = I_vals, icc_I = icc_I, icc_eta = icc_eta)
+}
+
+
+#' Nested Monte Carlo information ICC for a Poisson GLMM with a facet
+#'
+#' Conditional entropy given the object effect, with the facet
+#' integrated out. Used only when a facet is present.
+#'
+#' @param mu Numeric. Intercept on the log scale.
+#' @param sd_obj Numeric. Object random-effect SD.
+#' @param sd_facet Numeric. Pooled facet random-effect SD.
+#' @param K Integer. Outer object draws. Default 300.
+#' @param M Integer. Inner facet draws per object draw. Default 300.
+#' @return Numeric information ICC.
+#' @keywords internal
+.poisson_info_facet <- function(mu, sd_obj, sd_facet, K = 300, M = 300) {
+  u <- stats::rnorm(K, 0, sd_obj)
+  y_all <- integer(K * M)
+  h_cond <- 0
+  idx <- 0L
+  for (k in seq_len(K)) {
+    v <- stats::rnorm(M, 0, sd_facet)
+    y_k <- stats::rpois(M, exp(mu + u[k] + v))
+    y_all[(idx + 1L):(idx + M)] <- y_k
+    tab_k <- table(y_k) / M
+    h_cond <- h_cond - sum(tab_k * log(tab_k + 1e-30))
+    idx <- idx + M
+  }
+  h_cond <- h_cond / K
+  tab <- table(y_all) / length(y_all)
+  h_marg <- -sum(tab * log(tab + 1e-30))
+  1 - exp(-2 * max(h_marg - h_cond, 0))
 }

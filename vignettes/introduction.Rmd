@@ -30,7 +30,7 @@ The `dgt` package computes the correct response-scale reliability from any
 ## Installation
 
 ```{r}
-remotes::install_github("username/dgt")
+remotes::install_github("rckaruna/dgt")
 ```
 
 ## Example 1: Lognormal Measurements
@@ -213,6 +213,122 @@ fit_pois <- brm(
 result_p <- dgt_icc(fit_pois, person_group = "player")
 print(result_p)
 ```
+
+
+## Example 4: Binary Choices and a Decision Study
+
+A paired-choice discrete choice experiment (DCE) records, for each
+respondent and each choice task, which of two profiles was chosen. The
+response is Bernoulli. A decision study asks how many tasks per
+respondent are needed before a respondent-level quantity (the decrement
+a respondent attaches to an attribute level, say) is estimated to a
+stated reliability. On the logit scale this is the classical
+Spearman-Brown calculation with the $\pi^2/3$ residual convention. On
+the probability scale, which is where choice probabilities and value
+sets live, reliability is lower and the required number of tasks is
+larger. Both curves come from one fit.
+
+### Simulate a paired-choice design
+
+300 respondents and 21 tasks each. The respondent SD (1.0) and the task
+SD (0.6) on the logit scale are modelling assumptions, not estimates
+from any published study.
+
+```{r}
+set.seed(1)
+n_resp  <- 300
+n_task  <- 21
+sigma_r <- 1.0
+sigma_t <- 0.6
+
+u <- rnorm(n_resp, 0, sigma_r)
+v <- rnorm(n_task, 0, sigma_t)
+
+dce <- expand.grid(resp = 1:n_resp, task = 1:n_task)
+dce$eta <- u[dce$resp] + v[dce$task]
+dce$y   <- rbinom(nrow(dce), 1, plogis(dce$eta))
+```
+
+### Fit
+
+```{r}
+fit_dce <- brm(
+  y ~ 1 + (1 | resp) + (1 | task),
+  data = dce,
+  family = bernoulli(),
+  chains = 4, iter = 2000,
+  cores = 4
+)
+```
+
+### Decision study
+
+`person_group = "resp"` makes the respondent the object of measurement;
+the task intercept is treated as a facet and integrated out. `K` and
+`K_facet` set the outer and inner Monte Carlo sizes for the
+response-scale curve.
+
+```{r}
+ds_dce <- dgt_dstudy(fit_dce, n_grid = 1:60, person_group = "resp",
+                     K = 2000, K_facet = 300, seed = 1)
+print(ds_dce)
+
+# --- DGT D-Study ---
+# Family: bernoulli
+#
+# Required occasions for target reliability:
+#  threshold link_scale response_scale
+#        0.7          8             12
+#        0.8         13             20
+#        0.9         29             44
+
+plot(ds_dce, target = 0.80)
+```
+
+The response-scale curve reaches 0.70 at 12 tasks and 0.80 at 20; the
+link-scale curve reaches the same targets at 8 and 13. Reading off the
+design's own 21 tasks:
+
+```{r}
+subset(ds_dce$curves, n == 21, select = c(type, median, lower, upper))
+
+#             type median lower upper
+#       link-scale  0.869  ...   ...
+#   response-scale  0.814  ...   ...
+```
+
+Two things to note. The gap between the curves is not sampling error;
+response-scale reliability is below link-scale reliability for every
+`n` (the ordering `response <= link` is checked in the package tests).
+And the answer depends on the respondent SD: halving it to 0.5 pushes
+the response-scale 0.80 target beyond 60 tasks, so a decision study
+also states what respondent heterogeneity a recommended task count
+presupposes.
+
+### Heterogeneous attendance
+
+If a fraction of respondents attend to the attribute with reduced
+signal (attribute non-attendance in the DCE literature), the population
+is a mixture over respondents and the variance components of the
+estimated decrement change. Simulating 40% of respondents at half
+signal and refitting moves the response-scale requirements to 18, 30,
+and beyond 60 tasks for 0.70, 0.80, and 0.90. The direction is general;
+the size depends on the mixture. Non-attendance therefore enters the
+decision study as part of the population being generalized over rather
+than as a data-cleaning step applied before it.
+
+### Information curve
+
+`info = TRUE` adds the information-theoretic curve of Theorems 4-5. It
+is the expensive curve and sits at or below the link-scale curve.
+
+```{r}
+ds_dce_info <- dgt_dstudy(fit_dce, n_grid = 1:60, person_group = "resp",
+                          K = 2000, K_facet = 300, info = TRUE, seed = 1)
+```
+
+The facet is pooled in this release: respondents and tasks are not
+allocated separately. That extension is planned.
 
 
 ## The Three-ICC Framework

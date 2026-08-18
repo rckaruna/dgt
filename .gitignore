@@ -2,3 +2,6 @@
 **/.DS_Store
 /doc/
 /Meta/
+
+dgt.Rcheck/
+*.tar.gz

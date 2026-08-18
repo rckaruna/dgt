@@ -16,6 +16,8 @@
 #' @param fit A brms model fit object.
 #' @param person_group Character. Name of the person-level grouping factor.
 #'   If NULL (default), uses the first random effect.
+#' @param n_trials Integer. Binomial trials per observation. If NULL,
+#'   detected from the model where possible.
 #' @param K Integer. Number of simulated persons per posterior draw
 #'   (hurdle models only). Default 5000.
 #' @param probs Numeric vector of length 2. Quantile probabilities for
@@ -39,7 +41,8 @@
 #' }
 #'
 #' @export
-dgt_icc <- function(fit, person_group = NULL, K = 5000,
+
+dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
                     probs = c(0.025, 0.975), seed = NULL) {
 
   family <- .detect_family(fit)
@@ -107,16 +110,7 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000,
 
   } else if (family == "poisson") {
     draws <- .icc_poisson_draws(fit, person_group, K = K)
-
-    summary_df <- data.frame(
-      measure = c("ICC_Y (response-scale, counts)",
-                  "ICC_I (information)"),
-      rbind(
-        .posterior_summary(draws$icc_Y, probs),
-        .posterior_summary(draws$icc_I, probs)
-      )
-    )
-    rownames(summary_df) <- NULL
+    summary_df <- .discrete_summary(draws, probs, "(response-scale, counts)")
 
     result <- list(
       family   = family,
@@ -126,17 +120,8 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000,
     )
 
   } else if (family %in% c("binomial", "bernoulli")) {
-    draws <- .icc_binomial_draws(fit, person_group, K = K)
-
-    summary_df <- data.frame(
-      measure = c("ICC_Y (response-scale)",
-                  "ICC_I (information)"),
-      rbind(
-        .posterior_summary(draws$icc_Y, probs),
-        .posterior_summary(draws$icc_I, probs)
-      )
-    )
-    rownames(summary_df) <- NULL
+    draws <- .icc_binomial_draws(fit, person_group, n_trials = n_trials, K = K)
+    summary_df <- .discrete_summary(draws, probs, "(response-scale)")
 
     result <- list(
       family   = family,

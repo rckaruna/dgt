@@ -8,6 +8,7 @@ dgt_icc(
   fit,
   person_group = NULL,
   K = 5000,
+  n_trials = NULL,
   probs = c(0.025, 0.975),
   seed = NULL
 )
@@ -20,6 +21,9 @@ If NULL (default), uses the first random effect.}
 
 \item{K}{Integer. Number of simulated persons per posterior draw
 (hurdle models only). Default 5000.}
+
+\item{n_trials}{Integer. Binomial trials per observation. If NULL,
+detected from the model where possible.}
 
 \item{probs}{Numeric vector of length 2. Quantile probabilities for
 credible intervals. Default c(0.025, 0.975).}
