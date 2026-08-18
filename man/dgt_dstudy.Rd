@@ -9,6 +9,8 @@ dgt_dstudy(
   n_grid = 1:50,
   person_group = NULL,
   K = 5000,
+  K_facet = 500,
+  info = FALSE,
   probs = c(0.025, 0.975),
   seed = NULL
 )
@@ -21,7 +23,17 @@ Default \code{1:50}.}
 
 \item{person_group}{Character. Name of the person grouping factor.}
 
-\item{K}{Integer. Simulated persons per draw (hurdle only). Default 5000.}
+\item{K}{Integer. Simulated persons per draw (hurdle and Bernoulli).
+Default 5000. For Bernoulli families this is the outer Monte Carlo
+size; a few hundred is usually enough.}
+
+\item{K_facet}{Integer. Inner Monte Carlo draws per person used to
+integrate out facet random effects (Bernoulli/binomial only).
+Default 500.}
+
+\item{info}{Logical. For Bernoulli/binomial fits, also compute the
+information-theoretic D-study curve (Theorems 4-5). This is the
+expensive curve; default \code{FALSE}.}
 
 \item{probs}{Numeric. Credible interval probabilities. Default c(0.025, 0.975).}
 

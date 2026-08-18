@@ -12,7 +12,15 @@
 #' @param n_grid Integer vector. Numbers of occasions to evaluate.
 #'   Default \code{1:50}.
 #' @param person_group Character. Name of the person grouping factor.
-#' @param K Integer. Simulated persons per draw (hurdle only). Default 5000.
+#' @param K Integer. Simulated persons per draw (hurdle and Bernoulli).
+#'   Default 5000. For Bernoulli families this is the outer Monte Carlo
+#'   size; a few hundred is usually enough.
+#' @param K_facet Integer. Inner Monte Carlo draws per person used to
+#'   integrate out facet random effects (Bernoulli/binomial only).
+#'   Default 500.
+#' @param info Logical. For Bernoulli/binomial fits, also compute the
+#'   information-theoretic D-study curve (Theorems 4-5). This is the
+#'   expensive curve; default \code{FALSE}.
 #' @param probs Numeric. Credible interval probabilities. Default c(0.025, 0.975).
 #' @param seed Integer. Random seed (hurdle only).
 #'
@@ -31,7 +39,8 @@
 #'
 #' @export
 dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
-                       K = 5000, probs = c(0.025, 0.975), seed = NULL) {
+                       K = 5000, K_facet = 500, info = FALSE,
+                       probs = c(0.025, 0.975), seed = NULL) {
 
   family <- .detect_family(fit)
 
@@ -58,6 +67,27 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
 
     curves <- .summarize_dstudy_matrix(ds_mat, n_grid, "composite", probs)
     req_n <- NULL
+
+  } else if (family %in% c("bernoulli", "binomial")) {
+
+    vc <- .extract_varcomps_bernoulli(fit, person_group)
+    ds_draws <- .dstudy_bernoulli_draws(
+      alpha = vc$alpha, sd_obj = vc$sd_obj, sd_facet = vc$sd_facet,
+      n_grid = n_grid, K = K, K_facet = K_facet, info = info, seed = seed
+    )
+
+    curves <- rbind(
+      .summarize_dstudy_matrix(ds_draws$link,     n_grid, "link-scale", probs),
+      .summarize_dstudy_matrix(ds_draws$response, n_grid, "response-scale", probs)
+    )
+    if (info) {
+      curves <- rbind(
+        curves,
+        .summarize_dstudy_matrix(ds_draws$info, n_grid, "information", probs)
+      )
+    }
+
+    req_n <- .required_n_bernoulli(ds_draws, n_grid, c(0.70, 0.80, 0.90))
 
   } else {
     stop("Family '", family, "' is not yet supported.")
@@ -114,4 +144,23 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
   idx <- which(medians >= threshold)
   if (length(idx) == 0) return(NA_integer_)
   n_grid[idx[1]]
+}
+
+
+#' Compute required n for Bernoulli D-study draw matrices
+#' @keywords internal
+.required_n_bernoulli <- function(ds_draws, n_grid, thresholds) {
+  result <- list()
+  for (thresh in thresholds) {
+    row <- data.frame(
+      threshold      = thresh,
+      link_scale     = .find_n_threshold(ds_draws$link,     n_grid, thresh),
+      response_scale = .find_n_threshold(ds_draws$response, n_grid, thresh)
+    )
+    if (!is.null(ds_draws$info)) {
+      row$information <- .find_n_threshold(ds_draws$info, n_grid, thresh)
+    }
+    result[[as.character(thresh)]] <- row
+  }
+  do.call(rbind, result)
 }

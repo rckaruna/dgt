@@ -1,50 +1,24 @@
-# dgt 0.2.1
+# dgt 0.3.0
 
-## Bug fixes
-
-* `dgt_icc()` now accounts for crossed facets in the binomial, Bernoulli
-  and Poisson families. Up to 0.2.0 the response-scale estimators read
-  only the object grouping factor, so in a crossed design (persons by
-  items, say) the item variance was silently omitted from the error
-  term and the coefficient was inflated. The information estimators in
-  `dgt_info_icc()` already handled facets, so the two functions
-  disagreed on the same model; they are now consistent.
-
-* `dgt_icc()` gains an `n_trials` argument, and the number of binomial
-  trials is now detected from the fitted model when it can be
-  determined unambiguously. Previously the documented detection was not
-  implemented and every binomial model was treated as Bernoulli. When
-  the trials cannot be determined the function warns rather than
-  silently assuming one trial.
-
-## New features
-
-* The discrete families report relative and absolute coefficients
-  separately whenever a facet is present (`icc_Y_rel`, `icc_Y_abs`),
-  following the usual generalizability-theory conventions: the relative
-  coefficient excludes the facet main effect from error and the
-  absolute coefficient includes it. `icc_Y` is retained as an alias for
-  the relative coefficient. With no facet the two coincide and the
-  pre-0.2.1 value is reproduced exactly.
-
-* Response-scale variance components (`var_obj`, `var_facet`,
-  `var_int`) are returned alongside the coefficients.
-
-* Binomial components are computed by Gauss-Hermite quadrature rather
-  than simulation, so they are deterministic. Poisson components have
-  closed forms under the log-normal mixture and are computed directly.
-
-## Notes
-
-* The relative coefficient is not comparable with the link-scale
-  `icc_eta` reported by `dgt_info_icc()`, which places the facet
-  variance in the denominator. The absolute coefficient is the
-  coherent comparison, and only at a single trial. This is documented
-  in `?dgt_icc`.
-
-* For proportions and counts the coefficients are identical, since an
-  ICC is invariant to rescaling the response by the number of trials.
-  The `type` argument is retained for backward compatibility.
+* `dgt_dstudy()` now supports the `bernoulli` and `binomial` families.
+  For a logit-link GLMM with the object of measurement as one random
+  intercept and any other random intercepts treated as facets, it
+  returns two D-study curves as a function of the number of replicate
+  measurements `n`: the link-scale curve (classical coefficient with the
+  logistic pi^2/3 residual convention) and the response-scale curve (the
+  reliability of the observed proportion over `n` trials, which is what a
+  practitioner sees). With `info = TRUE` it also returns the
+  information-theoretic curve of Theorems 4-5. `required_n` reports the
+  first `n` reaching 0.70, 0.80, and 0.90 on each scale.
+* New arguments `K_facet` and `info` on `dgt_dstudy()`; existing
+  behaviour for lognormal and hurdle families is unchanged.
+* New internal routines `.dstudy_bernoulli_draws()` (pure computation,
+  testable without brms) and `.extract_varcomps_bernoulli()` (mirrors the
+  extraction in `.icc_bernoulli_info_draws()`).
+* Tests: `test-dstudy-bernoulli.R` checks the link-scale closed form
+  exactly, monotonicity and limits in `n`, agreement of the `n = 1`
+  response-scale value with the binomial engagement ICC, the ordering
+  response <= link <= 1 and information <= link, and the brms routing.
 
 # dgt 0.2.0
 
