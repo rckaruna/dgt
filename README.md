@@ -158,6 +158,18 @@ plot(ds, target = 0.80)
 dgt_required_n(fit, target = 0.80, person_group = "Subject")
 ```
 
+For Bernoulli and binomial fits (new in v0.3.0), `dgt_dstudy()` returns two curves from one fit: the link-scale curve (classical coefficient with the logistic π²/3 residual convention) and the response-scale curve (reliability of the observed proportion over `n` trials, which is what a practitioner sees). `required_n` reports the first `n` reaching 0.70, 0.80, and 0.90 on each scale. Any random intercept other than `person_group` is treated as a facet and integrated out.
+
+```r
+# Paired-choice DCE: respondents as object, tasks as facet
+ds <- dgt_dstudy(fit_dce, n_grid = 1:60, person_group = "resp",
+                 K = 2000, K_facet = 300)
+print(ds)   # required n on link and response scales
+plot(ds, target = 0.80)
+```
+
+See `vignette("introduction")`, Example 4, for a worked decision study.
+
 ## Information-Theoretic ICC
 
 ```r
@@ -204,6 +216,10 @@ print(vd)
 | `lognormal()` | Closed-form (Theorem 1) | — | = ICC_η (Theorem 6) |
 | `hurdle_lognormal()` | Composite (Theorem 4) | V1–V5 | Theorem 8 |
 | `gaussian()` | = ICC_η (Theorem 5) | — | = ICC_η |
+| `bernoulli()` / `binomial()` | Proportion and count ICCs, Monte Carlo over facets | — | Nested Monte Carlo (< ICC_η) |
+| `poisson()` | Closed-form Var(λ)/(E[λ]+Var(λ)) | — | Stirling approximation (< ICC_η) |
+
+`dgt_dstudy()` supports `lognormal()`, `hurdle_lognormal()`, `bernoulli()`, and `binomial()`.
 
 ## Functions
 
