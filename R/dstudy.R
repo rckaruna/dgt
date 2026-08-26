@@ -23,6 +23,14 @@
 #'   expensive curve; default \code{FALSE}.
 #' @param probs Numeric. Credible interval probabilities. Default c(0.025, 0.975).
 #' @param seed Integer. Random seed (hurdle only).
+#' @param facet_group Character. For \code{design = "crossed"}, the
+#'   grouping factor of the crossed facet. If NULL and the model has
+#'   exactly one non-object random effect, that one is used.
+#' @param design Character. \code{"nested"} (default) treats every
+#'   replicate as drawing a fresh facet level, giving absolute
+#'   coefficients as in v0.3.0. \code{"crossed"} shares one panel of
+#'   facet levels across all objects, so facet main effects cancel and
+#'   the two curves are relative coefficients (Bernoulli/binomial only).
 #'
 #' @return An object of class \code{"dgt_dstudy"} containing:
 #'   \describe{
@@ -40,9 +48,17 @@
 #' @export
 dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
                        K = 5000, K_facet = 500, info = FALSE,
-                       probs = c(0.025, 0.975), seed = NULL) {
+                       probs = c(0.025, 0.975), seed = NULL,
+                       facet_group = NULL,
+                       design = c("nested", "crossed")) {
 
+  design <- match.arg(design)
   family <- .detect_family(fit)
+
+  if (design == "crossed" && !family %in% c("bernoulli", "binomial")) {
+    stop("design = 'crossed' is available for bernoulli and binomial ",
+         "families in this release; got '", family, "'.")
+  }
 
   if (family %in% c("lognormal", "gaussian")) {
 
@@ -69,6 +85,35 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
     req_n <- NULL
 
   } else if (family %in% c("bernoulli", "binomial")) {
+
+    if (design == "crossed") {
+      if (info) {
+        stop("The information curve is not implemented for ",
+             "design = 'crossed'.")
+      }
+      vc <- .extract_varcomps_two(fit, person_group, facet_group)
+      ds_draws <- .dstudy_bernoulli_crossed_draws(
+        alpha = vc$alpha, sd_obj = vc$sd_obj, sd_facet = vc$sd_facet,
+        n_grid = n_grid, K = K, K_facet = K_facet, seed = seed
+      )
+      curves <- rbind(
+        .summarize_dstudy_matrix(ds_draws$link,     n_grid,
+                                 "link-scale (relative)", probs),
+        .summarize_dstudy_matrix(ds_draws$response, n_grid,
+                                 "response-scale (relative)", probs)
+      )
+      req_n <- .required_n_bernoulli(ds_draws, n_grid, c(0.70, 0.80, 0.90))
+      result <- list(
+        family     = family,
+        curves     = curves,
+        required_n = req_n,
+        n_grid     = n_grid,
+        design     = design,
+        facet_group = vc$facet_group
+      )
+      class(result) <- "dgt_dstudy"
+      return(result)
+    }
 
     vc <- .extract_varcomps_bernoulli(fit, person_group)
     ds_draws <- .dstudy_bernoulli_draws(
@@ -97,7 +142,8 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
     family     = family,
     curves     = curves,
     required_n = req_n,
-    n_grid     = n_grid
+    n_grid     = n_grid,
+    design     = "nested"
   )
   class(result) <- "dgt_dstudy"
   result

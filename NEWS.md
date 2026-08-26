@@ -1,3 +1,25 @@
+# dgt 0.4.0
+
+* Separated facets for Bernoulli/binomial D-studies: `dgt_dstudy()`
+  gains `facet_group` and `design = "crossed"`. In the crossed design
+  every object answers the same panel of facet levels, facet main
+  effects cancel in relative standing, and the two curves are the
+  relative-coefficient counterparts of the existing (absolute) ones.
+  At `sd_facet = 0` the crossed and pooled engines agree exactly, and
+  the crossed absolute coefficient equals the pooled one at every `n`,
+  which is why only the relative curves are new.
+* New `dgt_allocate()`: standard error of the estimated mean over a
+  grid of objects x facet levels, on the link and response scales,
+  with the best allocation per total sample size and an optional
+  target standard error. The response scale uses the exact
+  finite-sample identity Var(mean) = [mu(1 - mu)
+  + (n_facet - 1) Var_u(t) + (n_person - 1) Var_v(w)] /
+  (n_person * n_facet), verified against brute-force simulation in
+  the tests and in `verify_v040.py`.
+* New internal engines `.dstudy_bernoulli_crossed_draws()` and
+  `.allocate_bernoulli_draws()` are pure functions of posterior draws
+  and are tested without brms.
+
 # dgt 0.3.0
 
 * `dgt_dstudy()` now supports the `bernoulli` and `binomial` families.

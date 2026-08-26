@@ -12,7 +12,9 @@ dgt_dstudy(
   K_facet = 500,
   info = FALSE,
   probs = c(0.025, 0.975),
-  seed = NULL
+  seed = NULL,
+  facet_group = NULL,
+  design = c("nested", "crossed")
 )
 }
 \arguments{
@@ -38,6 +40,16 @@ expensive curve; default \code{FALSE}.}
 \item{probs}{Numeric. Credible interval probabilities. Default c(0.025, 0.975).}
 
 \item{seed}{Integer. Random seed (hurdle only).}
+
+\item{facet_group}{Character. For \code{design = "crossed"}, the
+grouping factor of the crossed facet. If NULL and the model has
+exactly one non-object random effect, that one is used.}
+
+\item{design}{Character. \code{"nested"} (default) treats every
+replicate as drawing a fresh facet level, giving absolute
+coefficients as in v0.3.0. \code{"crossed"} shares one panel of
+facet levels across all objects, so facet main effects cancel and
+the two curves are relative coefficients (Bernoulli/binomial only).}
 }
 \value{
 An object of class \code{"dgt_dstudy"} containing:

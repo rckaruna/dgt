@@ -31,7 +31,11 @@ print.dgt_icc <- function(x, digits = 3, ...) {
 #' @export
 print.dgt_dstudy <- function(x, ...) {
   cat("\n--- DGT D-Study ---\n")
-  cat("Family:", x$family, "\n\n")
+  cat("Family:", x$family, "\n")
+  if (!is.null(x$design) && x$design == "crossed") {
+    cat("Design: crossed (shared facet panel; relative coefficients)\n")
+  }
+  cat("\n")
 
   if (!is.null(x$required_n)) {
     cat("Required occasions for target reliability:\n")
