@@ -224,8 +224,7 @@ respondent are needed before a respondent-level quantity (the decrement
 a respondent attaches to an attribute level, say) is estimated to a
 stated reliability. On the logit scale this is the classical
 Spearman-Brown calculation with the $\pi^2/3$ residual convention. On
-the probability scale, which is where choice probabilities and value
-sets live, reliability is lower and the required number of tasks is
+the probability scale, which is where the observed choices live, reliability is lower and the required number of tasks is
 larger. Both curves come from one fit.
 
 ### Simulate a paired-choice design
@@ -257,7 +256,7 @@ fit_dce <- brm(
   data = dce,
   family = bernoulli(),
   chains = 4, iter = 2000,
-  cores = 4
+  cores = 4, seed = 1
 )
 ```
 
@@ -273,28 +272,32 @@ ds_dce <- dgt_dstudy(fit_dce, n_grid = 1:60, person_group = "resp",
                      K = 2000, K_facet = 300, seed = 1)
 print(ds_dce)
 
+# 
 # --- DGT D-Study ---
-# Family: bernoulli
-#
+# Family: bernoulli 
+# 
 # Required occasions for target reliability:
 #  threshold link_scale response_scale
-#        0.7          8             12
-#        0.8         13             20
-#        0.9         29             44
+#        0.7         11             15
+#        0.8         18             26
+#        0.9         40             58
+# 
+# Use plot() to visualize the D-study curves.
+# 
 
 plot(ds_dce, target = 0.80)
 ```
 
-The response-scale curve reaches 0.70 at 12 tasks and 0.80 at 20; the
-link-scale curve reaches the same targets at 8 and 13. Reading off the
+The response-scale curve reaches 0.70 at 15 tasks and 0.80 at 26; the
+link-scale curve reaches the same targets at 11 and 18. Reading off the
 design's own 21 tasks:
 
 ```{r}
 subset(ds_dce$curves, n == 21, select = c(type, median, lower, upper))
 
-#             type median lower upper
-#       link-scale  0.869  ...   ...
-#   response-scale  0.814  ...   ...
+#            type median lower upper
+#      link-scale  0.827 0.791 0.858
+#  response-scale  0.767 0.723 0.804
 ```
 
 Two things to note. The gap between the curves is not sampling error;
@@ -304,6 +307,10 @@ And the answer depends on the respondent SD: halving it to 0.5 pushes
 the response-scale 0.80 target beyond 60 tasks, so a decision study
 also states what respondent heterogeneity a recommended task count
 presupposes.
+These crossings are realization-specific: a fresh dataset simulated
+from the same parameter values moves them by a few tasks, since the
+D-study inherits the uncertainty of the estimated variance components,
+which is why the bands are reported.
 
 ### Heterogeneous attendance
 
