@@ -4,14 +4,26 @@
 \alias{dgt_overestimation}
 \title{Compute overestimation and D-study ratios}
 \usage{
-dgt_overestimation(fit, person_group = NULL, probs = c(0.025, 0.975))
+dgt_overestimation(
+  fit,
+  person_group = NULL,
+  probs = c(0.025, 0.975),
+  K = 2000,
+  seed = NULL,
+  thin = 1L,
+  exposure_var = NULL,
+  ref_exposure = NULL
+)
 }
 \arguments{
-\item{fit}{A brms model fit object (lognormal family).}
+\item{fit}{A brms model fit object (lognormal or hurdle-count family).}
 
 \item{person_group}{Character. Person grouping factor.}
 
 \item{probs}{Numeric. Credible interval probabilities.}
+
+\item{K, seed, thin, exposure_var, ref_exposure}{Hurdle counts only; see
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_overestimation"} with:

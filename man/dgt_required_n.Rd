@@ -9,7 +9,11 @@ dgt_required_n(
   target = 0.8,
   person_group = NULL,
   K = 5000,
-  probs = c(0.025, 0.975)
+  probs = c(0.025, 0.975),
+  seed = NULL,
+  thin = 1L,
+  exposure_var = NULL,
+  ref_exposure = NULL
 )
 }
 \arguments{
@@ -22,6 +26,9 @@ dgt_required_n(
 \item{K}{Integer. Simulated persons per draw (hurdle only).}
 
 \item{probs}{Numeric. Credible interval probabilities.}
+
+\item{seed, thin, exposure_var, ref_exposure}{Hurdle counts only; see
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_required_n"} with:

@@ -26,6 +26,7 @@
   fam <- stats::family(fit)$family
   if (fam %in% c("lognormal")) return("lognormal")
   if (fam %in% c("hurdle_lognormal")) return("hurdle_lognormal")
+  if (fam %in% c("hurdle_poisson", "hurdle_negbinomial")) return(fam)
   if (fam %in% c("gaussian")) return("gaussian")
   if (fam %in% c("poisson", "negbinomial")) return("poisson")
   if (fam %in% c("binomial")) return("binomial")

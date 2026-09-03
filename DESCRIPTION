@@ -1,12 +1,14 @@
 Package: dgt
 Title: Distributional Generalizability Theory
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: 
     person("Ruwan", "Karunanayaka", email = "ruwan.karunanayaka@ufv.ca", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0008-2459-1569"))
 Description: Extends classical Generalizability Theory to non-Gaussian 
     measurements via distributional response-scale ICCs, information-theoretic
-    reliability, and hurdle model decompositions. All quantities are computed
+    reliability, and hurdle model decompositions, including hurdle count
+    families (hurdle Poisson and negative binomial) evaluated at a reference
+    exposure. All quantities are computed
     from the posterior of brms models. Implements the framework described in
     "Distributional Generalizability Theory: Reliability for Non-Gaussian
     Measurements."

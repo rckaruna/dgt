@@ -209,17 +209,48 @@ print(vd)
 # Bottleneck: Continuous intensity process
 ```
 
+
+## Hurdle Counts with Exposure (v0.4.0)
+
+Counts with excess zeros and occasions of differing length -- sixes per
+innings in cricket, events per session, claims per policy-year -- are hurdle
+counts. `dgt` evaluates their response-scale reliability at a reference
+exposure and reports how much the intensity submodel's link-scale ICC
+overstates it.
+
+```r
+library(brms); library(dgt)
+fit <- brm(
+  bf(sixes ~ 1 + (1 | batter) + (1 | venue) + offset(log_balls),
+     hu    ~ 1 + log_balls + (1 | batter)),
+  data = innings, family = hurdle_poisson()
+)
+# reliability of expected sixes per 20-ball innings, batter as object of measurement
+res <- dgt_icc(fit, person_group = "batter", exposure_var = "log_balls",
+               ref_exposure = 20, K = 2000, seed = 1)
+print(res)                    # ICC_eta, ICC_Y, O, D and V1-V5
+dgt_required_n(fit, target = 0.80, person_group = "batter",
+               exposure_var = "log_balls", ref_exposure = 20)
+```
+
+`ref_exposure` sets the measurement target ("expected count per 20-ball
+innings"); the intensity exposure coefficient is read from the fit (1 for
+`offset()`, or the estimated coefficient if `log_balls` was fitted freely).
+Without a fit, `dgt_hurdle_count_population()` gives the same quantities from
+population parameters.
+
 ## Supported Model Families
 
 | Family | ICC_Y | Hurdle decomposition | ICC_I |
 |--------|-------|---------------------|-------|
 | `lognormal()` | Closed-form (Theorem 1) | — | = ICC_η (Theorem 6) |
 | `hurdle_lognormal()` | Composite (Theorem 4) | V1–V5 | Theorem 8 |
+| `hurdle_poisson()`, `hurdle_negbinomial()` | Response-scale ICC_Y at a reference exposure | V1–V5 (count convention) | — |
 | `gaussian()` | = ICC_η (Theorem 5) | — | = ICC_η |
 | `bernoulli()` / `binomial()` | Proportion and count ICCs, Monte Carlo over facets | — | Nested Monte Carlo (< ICC_η) |
 | `poisson()` | Closed-form Var(λ)/(E[λ]+Var(λ)) | — | Stirling approximation (< ICC_η) |
 
-`dgt_dstudy()` supports `lognormal()`, `hurdle_lognormal()`, `bernoulli()`, and `binomial()`.
+`dgt_dstudy()` supports `lognormal()`, `hurdle_lognormal()`, `hurdle_poisson()`, `hurdle_negbinomial()`, `bernoulli()`, and `binomial()`.
 
 ## Functions
 

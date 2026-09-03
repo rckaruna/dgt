@@ -9,11 +9,16 @@ dgt_variance(
   person_group = NULL,
   K = 5000,
   probs = c(0.025, 0.975),
-  seed = NULL
+  seed = NULL,
+  thin = 1L,
+  exposure_var = NULL,
+  ref_exposure = NULL
 )
 }
 \arguments{
-\item{fit}{A brms model fit object (hurdle_lognormal family).}
+\item{fit}{A brms model fit object (hurdle_lognormal, hurdle_poisson, or
+hurdle_negbinomial family). For hurdle counts the component labels
+follow the count paper: V3 intensity signal, V4 engagement signal.}
 
 \item{person_group}{Character. Person grouping factor.}
 
@@ -22,6 +27,9 @@ dgt_variance(
 \item{probs}{Numeric. Credible interval probabilities.}
 
 \item{seed}{Integer. Random seed.}
+
+\item{thin, exposure_var, ref_exposure}{Hurdle counts only; see
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_variance"} with:

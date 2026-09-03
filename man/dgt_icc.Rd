@@ -10,7 +10,10 @@ dgt_icc(
   K = 5000,
   n_trials = NULL,
   probs = c(0.025, 0.975),
-  seed = NULL
+  seed = NULL,
+  exposure_var = NULL,
+  ref_exposure = NULL,
+  thin = 1L
 )
 }
 \arguments{
@@ -29,6 +32,15 @@ detected from the model where possible.}
 credible intervals. Default c(0.025, 0.975).}
 
 \item{seed}{Integer. Random seed for reproducibility (hurdle models).}
+
+\item{exposure_var}{Character or NULL. Hurdle counts only: name of the
+log-exposure variable as it appears in the model formula.}
+
+\item{ref_exposure}{Numeric or NULL. Hurdle counts only: reference
+exposure on the natural scale; default the median observed exposure.}
+
+\item{thin}{Integer. Hurdle counts only: use every \code{thin}-th
+posterior draw. Default 1.}
 }
 \value{
 An object of class \code{"dgt_icc"} containing:
@@ -51,6 +63,15 @@ Theorem 1), and ICC_I (information, = ICC_eta by Theorem 5).
 For hurdle_lognormal models: computes ICC_Z (engagement), ICC_Y*
 (intensity), and ICC_comp (composite, Theorem 3a), plus the
 five-component variance decomposition.
+
+For hurdle_poisson and hurdle_negbinomial models (hurdle counts): computes
+the response-scale ICC_Y of the expected count at a reference exposure,
+the intensity link-scale ICC_eta, the engagement ICC, the overestimation
+ratio O and the decision-study multiplier D, plus the five-component
+decomposition (V1 engagement noise, V2 intensity noise, V3 intensity
+signal, V4 engagement signal, V5 interaction). Supply \code{exposure_var}
+(the log-exposure variable in the formula) and \code{ref_exposure}
+(natural scale) when occasions differ in length.
 }
 \examples{
 \dontrun{

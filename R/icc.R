@@ -13,6 +13,15 @@
 #' (intensity), and ICC_comp (composite, Theorem 3a), plus the
 #' five-component variance decomposition.
 #'
+#' For hurdle_poisson and hurdle_negbinomial models (hurdle counts): computes
+#' the response-scale ICC_Y of the expected count at a reference exposure,
+#' the intensity link-scale ICC_eta, the engagement ICC, the overestimation
+#' ratio O and the decision-study multiplier D, plus the five-component
+#' decomposition (V1 engagement noise, V2 intensity noise, V3 intensity
+#' signal, V4 engagement signal, V5 interaction). Supply \code{exposure_var}
+#' (the log-exposure variable in the formula) and \code{ref_exposure}
+#' (natural scale) when occasions differ in length.
+#'
 #' @param fit A brms model fit object.
 #' @param person_group Character. Name of the person-level grouping factor.
 #'   If NULL (default), uses the first random effect.
@@ -23,6 +32,12 @@
 #' @param probs Numeric vector of length 2. Quantile probabilities for
 #'   credible intervals. Default c(0.025, 0.975).
 #' @param seed Integer. Random seed for reproducibility (hurdle models).
+#' @param exposure_var Character or NULL. Hurdle counts only: name of the
+#'   log-exposure variable as it appears in the model formula.
+#' @param ref_exposure Numeric or NULL. Hurdle counts only: reference
+#'   exposure on the natural scale; default the median observed exposure.
+#' @param thin Integer. Hurdle counts only: use every \code{thin}-th
+#'   posterior draw. Default 1.
 #'
 #' @return An object of class \code{"dgt_icc"} containing:
 #'   \describe{
@@ -43,7 +58,8 @@
 #' @export
 
 dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
-                    probs = c(0.025, 0.975), seed = NULL) {
+                    probs = c(0.025, 0.975), seed = NULL,
+                    exposure_var = NULL, ref_exposure = NULL, thin = 1L) {
 
   family <- .detect_family(fit)
 
@@ -108,6 +124,20 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
       variance = var_df
     )
 
+  } else if (family %in% c("hurdle_poisson", "hurdle_negbinomial")) {
+    pars  <- .extract_varcomps_hurdle_count(fit, person_group, exposure_var, ref_exposure)
+    draws <- .icc_hurdle_count_draws(pars, K = K, thin = thin, seed = seed)
+    sm    <- .hurdle_count_summary(draws, probs)
+    result <- list(
+      family       = family,
+      summary      = sm$summary,
+      draws        = draws,
+      variance     = sm$variance,
+      ref_exposure = pars$ref_exposure,
+      exposure     = list(intensity_slope = pars$intensity_slope,
+                          hu_slope = pars$hu_slope)
+    )
+
   } else if (family == "poisson") {
     draws <- .icc_poisson_draws(fit, person_group, K = K)
     summary_df <- .discrete_summary(draws, probs, "(response-scale, counts)")
@@ -133,7 +163,7 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
   } else {
     stop("Family '", family, "' is not yet supported by dgt. ",
          "Supported families: gaussian, lognormal, hurdle_lognormal, ",
-         "poisson, binomial.")
+         "hurdle_poisson, hurdle_negbinomial, poisson, binomial.")
   }
 
   class(result) <- "dgt_icc"
