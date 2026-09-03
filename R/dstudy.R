@@ -23,6 +23,8 @@
 #'   expensive curve; default \code{FALSE}.
 #' @param probs Numeric. Credible interval probabilities. Default c(0.025, 0.975).
 #' @param seed Integer. Random seed (hurdle only).
+#' @param thin,exposure_var,ref_exposure Hurdle counts only; see
+#'   \code{\link{dgt_icc}}.
 #'
 #' @return An object of class \code{"dgt_dstudy"} containing:
 #'   \describe{
@@ -40,9 +42,26 @@
 #' @export
 dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
                        K = 5000, K_facet = 500, info = FALSE,
-                       probs = c(0.025, 0.975), seed = NULL) {
+                       probs = c(0.025, 0.975), seed = NULL,
+                       thin = 1L, exposure_var = NULL, ref_exposure = NULL) {
 
   family <- .detect_family(fit)
+
+  if (family %in% c("hurdle_poisson", "hurdle_negbinomial")) {
+    pars <- .extract_varcomps_hurdle_count(fit, person_group, exposure_var, ref_exposure)
+    hd   <- .icc_hurdle_count_draws(pars, K = K, thin = thin, seed = seed)
+    sb   <- function(icc) sapply(n_grid, function(nm) nm * icc / (1 + (nm - 1) * icc))
+    ds_link <- sb(hd$icc_eta); ds_resp <- sb(hd$icc_Y)
+    if (is.null(dim(ds_link))) { ds_link <- matrix(ds_link, 1); ds_resp <- matrix(ds_resp, 1) }
+    curves <- rbind(
+      .summarize_dstudy_matrix(ds_link, n_grid, "link-scale", probs),
+      .summarize_dstudy_matrix(ds_resp, n_grid, "response-scale", probs))
+    req_n <- .required_n_bernoulli(list(link = ds_link, response = ds_resp),
+                                   n_grid, c(0.70, 0.80, 0.90))
+    result <- list(family = family, curves = curves, required_n = req_n, n_grid = n_grid)
+    class(result) <- "dgt_dstudy"
+    return(result)
+  }
 
   if (family %in% c("lognormal", "gaussian")) {
 

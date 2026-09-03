@@ -8,9 +8,11 @@
 #' how much the classical D-study underestimates required occasions.
 #' D > O always (Proposition 15).
 #'
-#' @param fit A brms model fit object (lognormal family).
+#' @param fit A brms model fit object (lognormal or hurdle-count family).
 #' @param person_group Character. Person grouping factor.
 #' @param probs Numeric. Credible interval probabilities.
+#' @param K,seed,thin,exposure_var,ref_exposure Hurdle counts only; see
+#'   \code{\link{dgt_icc}}.
 #'
 #' @return An object of class \code{"dgt_overestimation"} with:
 #'   \describe{
@@ -20,10 +22,18 @@
 #'
 #' @export
 dgt_overestimation <- function(fit, person_group = NULL,
-                               probs = c(0.025, 0.975)) {
+                               probs = c(0.025, 0.975), K = 2000, seed = NULL,
+                               thin = 1L, exposure_var = NULL, ref_exposure = NULL) {
 
-  vc <- .extract_varcomps_lognormal(fit, person_group)
-  icc_draws <- .icc_lognormal_draws(vc)
+  family <- .detect_family(fit)
+  if (family %in% c("hurdle_poisson", "hurdle_negbinomial")) {
+    pars <- .extract_varcomps_hurdle_count(fit, person_group, exposure_var, ref_exposure)
+    hd   <- .icc_hurdle_count_draws(pars, K = K, thin = thin, seed = seed)
+    icc_draws <- data.frame(icc_eta = hd$icc_eta, icc_Y = hd$icc_Y)
+  } else {
+    vc <- .extract_varcomps_lognormal(fit, person_group)
+    icc_draws <- .icc_lognormal_draws(vc)
+  }
 
   # Overestimation ratio (Definition 11)
   O_ratio <- icc_draws$icc_eta / icc_draws$icc_Y
@@ -62,6 +72,8 @@ dgt_overestimation <- function(fit, person_group = NULL,
 #' @param person_group Character. Person grouping factor.
 #' @param K Integer. Simulated persons per draw (hurdle only).
 #' @param probs Numeric. Credible interval probabilities.
+#' @param seed,thin,exposure_var,ref_exposure Hurdle counts only; see
+#'   \code{\link{dgt_icc}}.
 #'
 #' @return An object of class \code{"dgt_required_n"} with:
 #'   \describe{
@@ -71,13 +83,20 @@ dgt_overestimation <- function(fit, person_group = NULL,
 #'
 #' @export
 dgt_required_n <- function(fit, target = 0.80, person_group = NULL,
-                           K = 5000, probs = c(0.025, 0.975)) {
+                           K = 5000, probs = c(0.025, 0.975), seed = NULL,
+                           thin = 1L, exposure_var = NULL, ref_exposure = NULL) {
 
   family <- .detect_family(fit)
 
-  if (family %in% c("lognormal", "gaussian")) {
-    vc <- .extract_varcomps_lognormal(fit, person_group)
-    icc_draws <- .icc_lognormal_draws(vc)
+  if (family %in% c("lognormal", "gaussian", "hurdle_poisson", "hurdle_negbinomial")) {
+    if (family %in% c("hurdle_poisson", "hurdle_negbinomial")) {
+      pars <- .extract_varcomps_hurdle_count(fit, person_group, exposure_var, ref_exposure)
+      hd   <- .icc_hurdle_count_draws(pars, K = K, thin = thin, seed = seed)
+      icc_draws <- data.frame(icc_eta = hd$icc_eta, icc_Y = hd$icc_Y)
+    } else {
+      vc <- .extract_varcomps_lognormal(fit, person_group)
+      icc_draws <- .icc_lognormal_draws(vc)
+    }
 
     n_eta <- ceiling(target * (1 - icc_draws$icc_eta) /
                      ((1 - target) * icc_draws$icc_eta))

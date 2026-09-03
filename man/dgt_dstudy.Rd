@@ -12,7 +12,10 @@ dgt_dstudy(
   K_facet = 500,
   info = FALSE,
   probs = c(0.025, 0.975),
-  seed = NULL
+  seed = NULL,
+  thin = 1L,
+  exposure_var = NULL,
+  ref_exposure = NULL
 )
 }
 \arguments{
@@ -38,6 +41,9 @@ expensive curve; default \code{FALSE}.}
 \item{probs}{Numeric. Credible interval probabilities. Default c(0.025, 0.975).}
 
 \item{seed}{Integer. Random seed (hurdle only).}
+
+\item{thin, exposure_var, ref_exposure}{Hurdle counts only; see
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_dstudy"} containing:

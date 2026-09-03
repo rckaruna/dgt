@@ -1,3 +1,28 @@
+# dgt 0.4.0
+
+* Hurdle COUNT families. `dgt_icc()`, `dgt_variance()`, `dgt_overestimation()`,
+  `dgt_required_n()` and `dgt_dstudy()` now accept brms `hurdle_poisson()` and
+  `hurdle_negbinomial()` fits. They return the response-scale ICC_Y of the
+  expected count, the intensity link-scale ICC_eta, the engagement ICC, the
+  overestimation ratio O = ICC_eta/ICC_Y, the decision-study multiplier
+  D = O(1-ICC_Y)/(1-ICC_eta), and the five-component decomposition
+  (V1 engagement noise, V2 intensity noise, V3 intensity signal, V4 engagement
+  signal, V5 interaction). Implements Karunanayaka, "Response-scale
+  reliability for count measurements: distributional generalizability theory
+  for hurdle models, with an application to Twenty20 cricket" (ANZJS, under
+  revision).
+* Reference exposure. New arguments `exposure_var` (the log-exposure variable
+  as it appears in the formula) and `ref_exposure` (natural scale) evaluate
+  the decomposition at a common exposure when occasions differ in length.
+  The intensity coefficient is read from the fit: 1 for `offset()`, the
+  estimated coefficient if the variable was fitted freely; the `hu` slope is
+  used if present.
+* New `dgt_hurdle_count_population()` computes the same quantities from
+  population parameters without a fit, for planning and simulation.
+* New `thin` argument on the hurdle-count paths to subsample posterior draws.
+* Note: for hurdle counts V3 denotes intensity signal and V4 engagement
+  signal, following the count paper; `hurdle_lognormal` labels are unchanged.
+
 # dgt 0.3.0
 
 * `dgt_dstudy()` now supports the `bernoulli` and `binomial` families.

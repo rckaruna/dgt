@@ -26,6 +26,10 @@
 #'   \item \code{gaussian} (with log-transformed response)
 #'   \item \code{lognormal}
 #'   \item \code{hurdle_lognormal}
+#'   \item \code{hurdle_poisson}, \code{hurdle_negbinomial} (hurdle counts
+#'     with a reference exposure; see \code{\link{dgt_icc}} and
+#'     \code{\link{dgt_hurdle_count_population}})
+#'   \item \code{poisson}, \code{negbinomial}, \code{bernoulli}, \code{binomial}
 #' }
 #'
 #' @section Key Theorems:
