@@ -155,6 +155,7 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
 
     result <- list(
       family   = family,
+      link     = attr(draws, "link"),
       summary  = summary_df,
       draws    = draws,
       variance = NULL

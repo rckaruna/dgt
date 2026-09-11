@@ -1,6 +1,6 @@
 Package: dgt
 Title: Distributional Generalizability Theory
-Version: 0.4.0
+Version: 0.5.0
 Authors@R: 
     person("Ruwan", "Karunanayaka", email = "ruwan.karunanayaka@ufv.ca", role = c("aut", "cre"),
            comment = c(ORCID = "0009-0008-2459-1569"))
@@ -26,6 +26,7 @@ Imports:
     ggplot2
 Suggests:
     testthat (>= 3.0.0),
+    mvtnorm,
     knitr,
     rmarkdown,
     LNIRT,

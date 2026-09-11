@@ -2,31 +2,28 @@
 % Please edit documentation in R/icc-binomial.R
 \name{.icc_bernoulli_info_draws}
 \alias{.icc_bernoulli_info_draws}
-\title{Compute Bernoulli/binomial information ICC draws}
+\title{Bernoulli / binomial information ICC draws}
 \usage{
 .icc_bernoulli_info_draws(fit, person_group = NULL, K = 500, K_facet = 500)
 }
 \arguments{
 \item{fit}{A brms model fit (bernoulli or binomial family).}
 
-\item{person_group}{Character. The grouping factor that is the object
-of measurement. Any other random effect is treated as a facet whose
-effect is integrated out via an inner Monte Carlo draw.}
+\item{person_group}{Character. Object grouping factor.}
 
-\item{K}{Integer. Number of outer draws (object random effects) per
-posterior sample. Default 500.}
+\item{K}{Integer. Outer draws (object effects) per posterior draw.}
 
-\item{K_facet}{Integer. Number of inner draws (facet random effects)
-per outer draw. Default 500.}
+\item{K_facet}{Integer. Inner draws (facet effects) per outer draw.}
 }
 \value{
-List with numeric vectors I, icc_I, icc_eta, one entry per
-posterior draw.
+List with numeric vectors I, icc_I, icc_eta; the link is
+carried as the attribute \code{"link"}.
 }
 \description{
-Nested Monte Carlo estimator of I(nu_obj; Y) for a Bernoulli or
-binomial GLMM with logit link and crossed random effects. Returns
-draw-by-draw estimates of the information ICC and the
-link-scale ICC (using the pi^2/3 logistic-residual convention).
+Nested Monte Carlo estimator of I(u; Y) with the facet integrated out
+of the conditional distribution. Returns draw-by-draw estimates of
+the information ICC and the link-scale ICC with the residual variance
+appropriate to the fitted link (pi^2/3 logit, 1 probit, pi^2/6
+cloglog, NA cauchit).
 }
 \keyword{internal}

@@ -2,52 +2,50 @@
 % Please edit documentation in R/icc-binomial.R
 \name{.binomial_icc_core}
 \alias{.binomial_icc_core}
-\title{Response-scale ICC core for a binomial GLMM with a crossed facet}
+\title{Response-scale ICC core for a Bernoulli / binomial GLMM with a facet}
 \usage{
-.binomial_icc_core(alpha, sd_obj, sd_facet = 0, nt = 1, n_nodes = 40)
+.binomial_icc_core(
+  alpha,
+  sd_obj,
+  sd_facet = 0,
+  nt = 1,
+  n_nodes = 40,
+  invlink = stats::plogis
+)
 }
 \arguments{
-\item{alpha}{Numeric. Intercept on the logit scale.}
+\item{alpha}{Numeric. Intercept on the link scale.}
 
 \item{sd_obj}{Numeric. Object random-effect SD.}
 
-\item{sd_facet}{Numeric. Pooled facet random-effect SD. Default 0.}
+\item{sd_facet}{Numeric. Pooled facet SD. Default 0.}
 
 \item{nt}{Integer. Binomial trials per observation. Default 1.}
 
 \item{n_nodes}{Integer. Quadrature nodes per dimension. Default 40.}
+
+\item{invlink}{Function. Inverse link. Default \code{stats::plogis}.}
 }
 \value{
-Named numeric vector with var_obj, var_facet, var_int,
-e_binom, icc_rel, icc_abs, and mean_pi.
+Named numeric vector: var_obj, var_facet, var_int, e_binom,
+mean_pi, icc_rel, icc_abs.
 }
 \description{
-Pure-numeric core, independent of brms, so the mathematics can be
-tested directly. The model is
-\code{logit(pi) = alpha + u + v} with \code{u ~ N(0, sd_obj^2)} the
-object effect and \code{v ~ N(0, sd_facet^2)} the pooled facet
-effect, and \code{Y | pi ~ Binomial(nt, pi)}.
+Gauss-Hermite quadrature over the object effect u ~ N(0, sd_obj^2)
+and the pooled facet effect v ~ N(0, sd_facet^2), with
+g(pi) = alpha + u + v and Y | pi ~ Binomial(nt, pi). The object's
+universe score on the response scale is the facet-averaged probability E_v(pi given u).
 }
 \details{
-The object's universe score on the response scale is
-\code{E_v[pi | u]}, the expected proportion over the facet universe.
-Because the link is nonlinear, the facet contribution does not split
-additively into a main effect and an interaction on the link scale,
-so both are obtained on the response scale by quadrature:
-\code{var_obj} is the variance of object universe scores,
-\code{var_facet} the variance of facet marginal means, and
-\code{var_int} the remainder of the total variance of pi.
-
-Two coefficients follow the usual generalizability-theory
-conventions. The relative coefficient excludes the facet main effect
-from error, and the absolute coefficient includes it:
-\deqn{ICC_rel = var_obj / (var_obj + var_int + E[pi(1-pi)]/nt)}
 \deqn{ICC_abs = var_obj / (var_obj + var_facet + var_int + E[pi(1-pi)]/nt)}
-When \code{sd_facet = 0} both reduce to
-\code{var_obj / (var_obj + E[pi(1-pi)]/nt)}, the quantity returned by
-versions up to 0.2.0.
+\deqn{ICC_rel = var_obj / (var_obj + var_int + E[pi(1-pi)]/nt)}
 
-Note that the coefficients are identical for proportions and counts,
-since an ICC is invariant to multiplying the response by \code{nt}.
+With nt = 1 the denominator of ICC_abs is P(1 - P), so ICC_abs equals
+the population intraclass kappa (Fleiss) and the phi coefficient under
+compound symmetry. For the probit link the exact value is
+(Phi_2(z, z; rho) - P^2) / (P(1 - P)) with
+z = alpha / sqrt(1 + sd_obj^2 + sd_facet^2) and
+rho = sd_obj^2 / (1 + sd_obj^2 + sd_facet^2); the tests check the
+quadrature against this closed form.
 }
 \keyword{internal}

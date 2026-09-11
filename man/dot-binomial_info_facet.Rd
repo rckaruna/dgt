@@ -2,30 +2,38 @@
 % Please edit documentation in R/icc-binomial.R
 \name{.binomial_info_facet}
 \alias{.binomial_info_facet}
-\title{Nested Monte Carlo information ICC for a binomial GLMM with a facet}
+\title{Nested Monte Carlo information ICC for a Bernoulli / binomial GLMM}
 \usage{
-.binomial_info_facet(alpha, sd_obj, sd_facet, nt, K = 300, M = 300)
+.binomial_info_facet(
+  alpha,
+  sd_obj,
+  sd_facet,
+  nt,
+  K = 300,
+  M = 300,
+  invlink = stats::plogis
+)
 }
 \arguments{
-\item{alpha}{Numeric. Intercept on the logit scale.}
+\item{alpha}{Numeric. Intercept on the link scale.}
 
 \item{sd_obj}{Numeric. Object random-effect SD.}
 
-\item{sd_facet}{Numeric. Pooled facet random-effect SD.}
+\item{sd_facet}{Numeric. Pooled facet SD.}
 
 \item{nt}{Integer. Binomial trials per observation.}
 
 \item{K}{Integer. Outer object draws. Default 300.}
 
 \item{M}{Integer. Inner facet draws per object draw. Default 300.}
+
+\item{invlink}{Function. Inverse link. Default \code{stats::plogis}.}
 }
 \value{
 Numeric information ICC.
 }
 \description{
 Conditional entropy is taken given the object effect with the facet
-integrated out, which is the quantity Theorem 5 refers to. Used only
-when a facet is present; with no facet the closed-form branch of
-\code{.icc_binomial_draws} is retained unchanged.
+integrated out. Works with sd_facet = 0.
 }
 \keyword{internal}

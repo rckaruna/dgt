@@ -90,9 +90,11 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
   } else if (family %in% c("bernoulli", "binomial")) {
 
     vc <- .extract_varcomps_bernoulli(fit, person_group)
+    link <- .binary_link(fit)
     ds_draws <- .dstudy_bernoulli_draws(
       alpha = vc$alpha, sd_obj = vc$sd_obj, sd_facet = vc$sd_facet,
-      n_grid = n_grid, K = K, K_facet = K_facet, info = info, seed = seed
+      n_grid = n_grid, K = K, K_facet = K_facet, info = info, seed = seed,
+      invlink = .inv_link_fun(link), resid_var = .link_resid_var(link)
     )
 
     curves <- rbind(

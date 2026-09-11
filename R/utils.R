@@ -220,15 +220,16 @@
 #' @keywords internal
 .discrete_summary <- function(draws, probs, label) {
   if ("icc_Y_abs" %in% names(draws)) {
-    data.frame(
-      measure = c(paste0("ICC_Y ", label, ", relative"),
-                  paste0("ICC_Y ", label, ", absolute"),
-                  "ICC_I (information)"),
-      rbind(.posterior_summary(draws$icc_Y_rel, probs),
-            .posterior_summary(draws$icc_Y_abs, probs),
-            .posterior_summary(draws$icc_I, probs)),
-      row.names = NULL
-    )
+    has_eta <- "icc_eta" %in% names(draws)
+    measure <- c(paste0("ICC_Y ", label, ", absolute"),
+                 paste0("ICC_Y ", label, ", relative"),
+                 if (has_eta) "ICC_eta (link-scale)",
+                 "ICC_I (information)")
+    rows <- rbind(.posterior_summary(draws$icc_Y_abs, probs),
+                  .posterior_summary(draws$icc_Y_rel, probs),
+                  if (has_eta) .posterior_summary(draws$icc_eta, probs),
+                  .posterior_summary(draws$icc_I, probs))
+    data.frame(measure = measure, rows, row.names = NULL)
   } else {
     data.frame(
       measure = c(paste0("ICC_Y ", label), "ICC_I (information)"),

@@ -48,7 +48,7 @@
 #'
 #' @docType package
 #' @name dgt-package
-#' @importFrom stats median quantile var sd rnorm plogis
+#' @importFrom stats median quantile var sd rnorm plogis pnorm pcauchy dbinom
 #' @importFrom ggplot2 ggplot aes geom_line geom_ribbon geom_density
 #'   geom_hline annotate labs theme_minimal theme scale_y_continuous
 #'   scale_x_continuous

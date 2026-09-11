@@ -12,6 +12,15 @@ print.dgt_icc <- function(x, digits = 3, ...) {
                 s$measure[i], s$estimate[i], s$lower[i], s$upper[i]))
   }
 
+  if (!is.null(x$link) && x$family %in% c("bernoulli", "binomial")) {
+    cat("\nLink:", x$link, "\n")
+    cat("  ICC_Y (absolute) is the population intraclass kappa (Fleiss) and\n")
+    cat("  the phi coefficient under compound symmetry (Definition 1).\n")
+    if (identical(x$link, "probit")) {
+      cat("  Under the probit link ICC_eta is the tetrachoric correlation.\n")
+    }
+  }
+
   if (!is.null(x$variance)) {
     cat("\nVariance Decomposition:\n")
     v <- x$variance

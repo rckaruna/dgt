@@ -1,6 +1,7 @@
 # dstudy-bernoulli.R — D-study curves for Bernoulli / binomial GLMMs
 #
-# Extends dgt_dstudy() to the logit-link Bernoulli / binomial families.
+# Extends dgt_dstudy() to the Bernoulli / binomial families (logit,
+# probit, cloglog or cauchit link; the link is read from the fit).
 # The object of measurement has a random intercept u ~ N(0, sd_obj^2);
 # every other random effect is treated as a facet whose effect v is
 # integrated out. Replicating the measurement n times (n tasks, n items,
@@ -35,13 +36,19 @@
 #' @param info Logical. Also compute the information ICC curve? This is
 #'   the expensive part; default \code{FALSE}.
 #' @param seed Integer or NULL. Random seed.
+#' @param invlink Function. Inverse link read from the fit by the caller;
+#'   default \code{stats::plogis}.
+#' @param resid_var Numeric. Link-scale residual variance for the
+#'   link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).
 #' @return A list of matrices \code{link}, \code{response}, and (if
 #'   \code{info = TRUE}) \code{info}, each of dimension
 #'   \code{length(alpha) x length(n_grid)}.
 #' @keywords internal
 .dstudy_bernoulli_draws <- function(alpha, sd_obj, sd_facet, n_grid,
                                     K = 500, K_facet = 500,
-                                    info = FALSE, seed = NULL) {
+                                    info = FALSE, seed = NULL,
+                                    invlink = stats::plogis,
+                                    resid_var = pi^2 / 3) {
   if (!is.null(seed)) set.seed(seed)
 
   S  <- length(alpha)
@@ -49,7 +56,7 @@
   stopifnot(length(sd_obj) == S, length(sd_facet) == S)
   stopifnot(all(n_grid >= 1), all(n_grid == floor(n_grid)))
 
-  logit_resid_var <- pi^2 / 3
+  logit_resid_var <- resid_var
 
   link_mat <- matrix(NA_real_, S, nG)
   resp_mat <- matrix(NA_real_, S, nG)
@@ -73,9 +80,9 @@
     u <- stats::rnorm(K, 0, so)
     if (sf > 0) {
       v      <- matrix(stats::rnorm(K * K_facet, 0, sf), K, K_facet)
-      p_cond <- rowMeans(stats::plogis(a + u + v))
+      p_cond <- rowMeans(invlink(a + u + v))
     } else {
-      p_cond <- stats::plogis(a + u)
+      p_cond <- invlink(a + u)
     }
 
     var_pi    <- stats::var(p_cond)
