@@ -32,8 +32,11 @@ importFrom(ggplot2,
 )
 importFrom(rlang,.data)
 importFrom(stats,
+  dbinom,
   median,
+  pcauchy,
   plogis,
+  pnorm,
   quantile,
   rnorm,
   sd,

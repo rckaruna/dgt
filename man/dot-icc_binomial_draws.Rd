@@ -2,44 +2,45 @@
 % Please edit documentation in R/icc-binomial.R
 \name{.icc_binomial_draws}
 \alias{.icc_binomial_draws}
-\title{Compute binomial ICC draws}
+\title{Compute Bernoulli / binomial ICC draws}
 \usage{
 .icc_binomial_draws(
   fit,
   person_group = NULL,
   n_trials = NULL,
-  K = 5000,
-  type = "proportion"
+  K = 300,
+  K_facet = 300,
+  type = "proportion",
+  n_nodes = 40
 )
 }
 \arguments{
-\item{fit}{A brms model fit (binomial family with logit link).}
+\item{fit}{A brms model fit (bernoulli or binomial family; logit,
+probit, cloglog or cauchit link).}
 
-\item{person_group}{Character. Person grouping factor.}
+\item{person_group}{Character. Grouping factor that is the object of
+measurement. Any other random intercept is a facet.}
 
-\item{n_trials}{Integer. Number of trials per observation. If NULL,
-extracted from the model.}
+\item{n_trials}{Integer. Trials per observation; detected from the
+model when NULL.}
 
-\item{K}{Integer. Simulated persons per draw. Default 5000.}
+\item{K}{Integer. Outer Monte Carlo draws (objects) per posterior
+draw for the information ICC. Default 300.}
 
-\item{type}{Character. "proportion" or "count". Default "proportion".}
+\item{K_facet}{Integer. Inner draws (facet effects) per object draw
+for the information ICC. Default 300.}
+
+\item{type}{Retained for backward compatibility; the coefficients are
+identical for proportions and counts.}
+
+\item{n_nodes}{Integer. Gauss-Hermite nodes per dimension. Default 40.}
 }
 \value{
-Data frame with icc_Y, icc_I columns.
+Data frame, one row per posterior draw, with columns icc_Y
+(absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale), icc_I,
+var_obj, var_facet, var_int, mean_pi.
 }
 \description{
-For a binomial GLMM Y|nu ~ Binomial(n_trials, pi_p) with
-logit(pi_p) = mu + nu_p, computes the response-scale ICC for
-proportions (Y/n_trials) and for counts (Y).
-}
-\details{
-For proportions:
-\eqn{\mathrm{ICC}_Y = \mathrm{Var}(\pi_p) / (\mathrm{E}[\pi(1-\pi)]/n + \mathrm{Var}(\pi_p))}.
-
-For counts:
-\eqn{\mathrm{ICC}_Y = n \mathrm{Var}(\pi) / (\mathrm{E}[\pi(1-\pi)] + n \mathrm{Var}(\pi))}.
-
-As n_trials -> Inf, ICC_Y -> 1 (proportion becomes perfectly reliable).
-As n_trials = 1 (single Bernoulli), this reduces to the engagement ICC.
+Compute Bernoulli / binomial ICC draws
 }
 \keyword{internal}

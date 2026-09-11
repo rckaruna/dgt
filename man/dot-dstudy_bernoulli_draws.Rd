@@ -12,7 +12,9 @@
   K = 500,
   K_facet = 500,
   info = FALSE,
-  seed = NULL
+  seed = NULL,
+  invlink = stats::plogis,
+  resid_var = pi^2/3
 )
 }
 \arguments{
@@ -34,6 +36,12 @@ on the logit scale.}
 the expensive part; default \code{FALSE}.}
 
 \item{seed}{Integer or NULL. Random seed.}
+
+\item{invlink}{Function. Inverse link read from the fit by the caller;
+default \code{stats::plogis}.}
+
+\item{resid_var}{Numeric. Link-scale residual variance for the
+link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).}
 }
 \value{
 A list of matrices \code{link}, \code{response}, and (if

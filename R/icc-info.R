@@ -139,7 +139,7 @@ dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
 
     summary_df <- data.frame(
       measure = c("I(nu; Y) (mutual information, nats)",
-                  "ICC_I (information)", "ICC_eta (logit-scale)",
+                  "ICC_I (information)", "ICC_eta (link-scale)",
                   "Gap (ICC_eta - ICC_I)"),
       rbind(
         .posterior_summary(draws$I_val, probs),

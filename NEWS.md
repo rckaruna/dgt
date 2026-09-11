@@ -1,3 +1,37 @@
+# dgt 0.5.0
+
+* Correction for the bernoulli / binomial families. Versions 0.2.0 to
+  0.4.0 applied the logistic inverse link to every bernoulli / binomial
+  fit regardless of the link actually fitted, and assumed the logistic
+  residual variance pi^2/3 for the link-scale ICC. A probit fit therefore
+  returned a response-scale ICC that was too low and a link-scale ICC that
+  was not the tetrachoric correlation. The link is now read from the fit
+  (logit, probit, cloglog, cauchit) in `dgt_icc()`, `dgt_info_icc()` and
+  `dgt_dstudy()`. Results for logit fits are unchanged. This bug was found
+  by a reviewer of the DGT paper on a probit rater-agreement model, where
+  `dgt_icc()` reported 0.31 against an intraclass kappa of 0.51; the
+  corrected value is 0.48, in agreement with the kappa and with the
+  model-based phi coefficient.
+* `ICC_Y` for bernoulli / binomial fits now defaults to the absolute
+  coefficient (facet variance in the error term), which is the quantity
+  Definition 1 of the paper defines and the one the lognormal path has
+  always returned. With a single Bernoulli trial the absolute coefficient
+  equals the population intraclass kappa (Fleiss) and the phi coefficient
+  under compound symmetry. The relative coefficient is still reported as
+  `icc_Y_rel`. Versions 0.2.1 to 0.4.0 reported the relative coefficient
+  as `ICC_Y` when a facet was present.
+* The no-facet path, which used a normal approximation to the binomial
+  entropy, is removed; every bernoulli / binomial fit now goes through the
+  quadrature core and the exact-pmf nested Monte Carlo information
+  estimator. `dgt_icc()` for these families now also reports `ICC_eta`
+  with the link-appropriate residual variance.
+* New pure-numeric tests check the probit quadrature against the exact
+  bivariate-normal closed form (`mvtnorm`), the logit / probit distinction,
+  and the reviewer's example.
+* New script `inst/reviewer/vanbelle_design.R` reproduces a subjects x
+  raters probit design with known population phi and compares `dgt_icc()`
+  with the sample intraclass kappa.
+
 # dgt 0.4.0
 
 * Hurdle COUNT families. `dgt_icc()`, `dgt_variance()`, `dgt_overestimation()`,

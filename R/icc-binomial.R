@@ -1,30 +1,53 @@
-# icc-binomial.R — Binomial response-scale ICC
+# icc-binomial.R -- Bernoulli / binomial response-scale ICC
+#
+# Model: Y | u, v ~ Binomial(nt, pi), g(pi) = alpha + u + v, with
+# u ~ N(0, sd_obj^2) the object (person) effect and v ~ N(0, sd_facet^2)
+# the pooled effect of every other random intercept (raters, items,
+# occasions). The link g is read from the fit (logit, probit, cloglog,
+# cauchit).
+#
+# Response-scale coefficients (Definition 1 of the DGT paper): the
+# covariance of two observations on the same object divided by the
+# marginal variance of one observation. With nt = 1,
+#
+#   absolute  ICC_Y = Var_u(E[pi | u]) / (P (1 - P)),  P = E[pi],
+#
+# which equals the population intraclass kappa of Fleiss and the phi
+# coefficient under compound symmetry (Proposition, binary case, of the
+# revised paper). The relative coefficient removes the facet main effect
+# from the error term, following the generalizability-coefficient
+# convention. Both are returned; ICC_Y defaults to the absolute
+# coefficient, which is the quantity Definition 1 defines and the one
+# the lognormal path has always returned.
+#
+# History. Versions up to 0.2.0 ignored facet random effects. Version
+# 0.2.1 added the crossed-facet quadrature but kept the relative
+# coefficient as the default and retained a no-facet path with a crude
+# entropy approximation. Versions 0.2.0 to 0.4.0 hard-coded the logistic
+# inverse link. Version 0.5.0 fixes all three.
 
-#' Compute binomial ICC draws
+#' Compute Bernoulli / binomial ICC draws
 #'
-#' For a binomial GLMM Y|nu ~ Binomial(n_trials, pi_p) with
-#' logit(pi_p) = mu + nu_p, computes the response-scale ICC for
-#' proportions (Y/n_trials) and for counts (Y).
-#'
-#' For proportions:
-#'   \eqn{\mathrm{ICC}_Y = \mathrm{Var}(\pi_p) / (\mathrm{E}[\pi(1-\pi)]/n + \mathrm{Var}(\pi_p))}.
-#'
-#' For counts:
-#'   \eqn{\mathrm{ICC}_Y = n \mathrm{Var}(\pi) / (\mathrm{E}[\pi(1-\pi)] + n \mathrm{Var}(\pi))}.
-#'
-#' As n_trials -> Inf, ICC_Y -> 1 (proportion becomes perfectly reliable).
-#' As n_trials = 1 (single Bernoulli), this reduces to the engagement ICC.
-#'
-#' @param fit A brms model fit (binomial family with logit link).
-#' @param person_group Character. Person grouping factor.
-#' @param n_trials Integer. Number of trials per observation. If NULL,
-#'   extracted from the model.
-#' @param K Integer. Simulated persons per draw. Default 5000.
-#' @param type Character. "proportion" or "count". Default "proportion".
-#' @return Data frame with icc_Y, icc_I columns.
+#' @param fit A brms model fit (bernoulli or binomial family; logit,
+#'   probit, cloglog or cauchit link).
+#' @param person_group Character. Grouping factor that is the object of
+#'   measurement. Any other random intercept is a facet.
+#' @param n_trials Integer. Trials per observation; detected from the
+#'   model when NULL.
+#' @param K Integer. Outer Monte Carlo draws (objects) per posterior
+#'   draw for the information ICC. Default 300.
+#' @param K_facet Integer. Inner draws (facet effects) per object draw
+#'   for the information ICC. Default 300.
+#' @param type Retained for backward compatibility; the coefficients are
+#'   identical for proportions and counts.
+#' @param n_nodes Integer. Gauss-Hermite nodes per dimension. Default 40.
+#' @return Data frame, one row per posterior draw, with columns icc_Y
+#'   (absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale), icc_I,
+#'   var_obj, var_facet, var_int, mean_pi.
 #' @keywords internal
 .icc_binomial_draws <- function(fit, person_group = NULL, n_trials = NULL,
-                                K = 5000, type = "proportion") {
+                                K = 300, K_facet = 300, type = "proportion",
+                                n_nodes = 40) {
   post <- posterior::as_draws_df(fit)
 
   re <- .extract_re_sds(fit, person_group)
@@ -34,146 +57,87 @@
   alpha <- as.numeric(post[["b_Intercept"]])
   S <- length(alpha)
 
-  # Trials: argument wins, then the model, then 1 with an explicit warning.
+  link    <- .binary_link(fit)
+  invlink <- .inv_link_fun(link)
+  rvar    <- .link_resid_var(link)
+
   if (is.null(n_trials)) {
     n_trials <- .detect_n_trials(fit)
     if (is.null(n_trials)) {
-      warning("Could not determine the number of binomial trials from the ",
-              "model; assuming n_trials = 1. Pass n_trials explicitly if ",
-              "the response is a count out of several trials.",
-              call. = FALSE)
+      if (.detect_family(fit) == "binomial") {
+        warning("Could not determine the number of binomial trials from the ",
+                "model; assuming n_trials = 1. Pass n_trials explicitly if ",
+                "the response is a count out of several trials.",
+                call. = FALSE)
+      }
       n_trials <- 1
     }
   }
   nt <- n_trials
 
-  has_facet <- any(sd_facet > 0)
+  # dgt_icc() passes K = 5000 (the hurdle Monte Carlo size); the nested
+  # information estimator needs far fewer outer draws, so cap it.
+  K_info <- min(as.integer(K), 300L)
 
-  # With a crossed facet the response-scale ICC is computed by
-  # quadrature and reported for both relative and absolute decisions.
-  if (has_facet) {
-    icc_rel <- icc_abs <- icc_I <- numeric(S)
-    v_obj <- v_facet <- v_int <- numeric(S)
-    for (s in seq_len(S)) {
-      cc <- .binomial_icc_core(alpha[s], tau[s], sd_facet[s], nt)
-      icc_rel[s] <- cc[["icc_rel"]]
-      icc_abs[s] <- cc[["icc_abs"]]
-      v_obj[s]   <- cc[["var_obj"]]
-      v_facet[s] <- cc[["var_facet"]]
-      v_int[s]   <- cc[["var_int"]]
-      icc_I[s]   <- .binomial_info_facet(alpha[s], tau[s], sd_facet[s], nt)
-    }
-    return(data.frame(icc_Y     = icc_rel,
-                      icc_Y_rel = icc_rel,
-                      icc_Y_abs = icc_abs,
-                      icc_I     = icc_I,
-                      var_obj   = v_obj,
-                      var_facet = v_facet,
-                      var_int   = v_int))
-  }
-
-  # No facet: the pre-0.2.1 code path, retained unchanged.
-  icc_Y <- numeric(S)
-  icc_I <- numeric(S)
+  icc_rel <- icc_abs <- icc_eta <- icc_I <- numeric(S)
+  v_obj <- v_facet <- v_int <- mean_pi <- numeric(S)
 
   for (s in seq_len(S)) {
-    u <- stats::rnorm(K, 0, tau[s])
-    pi_p <- stats::plogis(alpha[s] + u)
-
-    var_pi    <- stats::var(pi_p)
-    E_pi_1mpi <- mean(pi_p * (1 - pi_p))
-
-    if (type == "proportion") {
-      # ICC for Y/n
-      icc_Y[s] <- var_pi / (E_pi_1mpi / nt + var_pi)
-    } else {
-      # ICC for Y (count)
-      icc_Y[s] <- nt * var_pi / (E_pi_1mpi + nt * var_pi)
-    }
-
-    # Information ICC via simulation
-    Y_sim <- stats::rbinom(K, nt, pi_p)
-    if (type == "proportion") Y_sim <- Y_sim / nt
-
-    # Conditional entropy: H(Y|pi) for binomial
-    # Using normal approximation: H ~ 0.5 log(2*pi*e * n*pi*(1-pi))
-    if (nt > 1) {
-      h_cond <- mean(0.5 * log(2 * pi * exp(1) * nt * pi_p * (1 - pi_p) + 1e-30))
-    } else {
-      # Bernoulli entropy
-      h_cond <- mean(-pi_p * log(pi_p + 1e-30) -
-                      (1 - pi_p) * log(1 - pi_p + 1e-30))
-    }
-
-    # Marginal entropy
-    tab <- table(Y_sim) / K
-    h_marg <- -sum(tab * log(tab + 1e-30))
-
-    I_val <- max(h_marg - h_cond, 0)
-    icc_I[s] <- 1 - exp(-2 * I_val)
+    cc <- .binomial_icc_core(alpha[s], tau[s], sd_facet[s], nt,
+                             n_nodes = n_nodes, invlink = invlink)
+    icc_rel[s] <- cc[["icc_rel"]]
+    icc_abs[s] <- cc[["icc_abs"]]
+    v_obj[s]   <- cc[["var_obj"]]
+    v_facet[s] <- cc[["var_facet"]]
+    v_int[s]   <- cc[["var_int"]]
+    mean_pi[s] <- cc[["mean_pi"]]
+    icc_eta[s] <- tau[s]^2 / (tau[s]^2 + sd_facet[s]^2 + rvar)
+    icc_I[s]   <- .binomial_info_facet(alpha[s], tau[s], sd_facet[s], nt,
+                                       K = K_info, M = K_facet,
+                                       invlink = invlink)
   }
 
-  data.frame(
-    icc_Y = icc_Y,
-    icc_I = icc_I
-  )
+  out <- data.frame(icc_Y     = icc_abs,
+                    icc_Y_rel = icc_rel,
+                    icc_Y_abs = icc_abs,
+                    icc_eta   = icc_eta,
+                    icc_I     = icc_I,
+                    var_obj   = v_obj,
+                    var_facet = v_facet,
+                    var_int   = v_int,
+                    mean_pi   = mean_pi)
+  attr(out, "link") <- link
+  attr(out, "n_trials") <- nt
+  out
 }
 
 
-#' Compute Bernoulli/binomial information ICC draws
+#' Bernoulli / binomial information ICC draws
 #'
-#' Nested Monte Carlo estimator of I(nu_obj; Y) for a Bernoulli or
-#' binomial GLMM with logit link and crossed random effects. Returns
-#' draw-by-draw estimates of the information ICC and the
-#' link-scale ICC (using the pi^2/3 logistic-residual convention).
+#' Nested Monte Carlo estimator of I(u; Y) with the facet integrated out
+#' of the conditional distribution. Returns draw-by-draw estimates of
+#' the information ICC and the link-scale ICC with the residual variance
+#' appropriate to the fitted link (pi^2/3 logit, 1 probit, pi^2/6
+#' cloglog, NA cauchit).
 #'
 #' @param fit A brms model fit (bernoulli or binomial family).
-#' @param person_group Character. The grouping factor that is the object
-#'   of measurement. Any other random effect is treated as a facet whose
-#'   effect is integrated out via an inner Monte Carlo draw.
-#' @param K Integer. Number of outer draws (object random effects) per
-#'   posterior sample. Default 500.
-#' @param K_facet Integer. Number of inner draws (facet random effects)
-#'   per outer draw. Default 500.
-#' @return List with numeric vectors I, icc_I, icc_eta, one entry per
-#'   posterior draw.
+#' @param person_group Character. Object grouping factor.
+#' @param K Integer. Outer draws (object effects) per posterior draw.
+#' @param K_facet Integer. Inner draws (facet effects) per outer draw.
+#' @return List with numeric vectors I, icc_I, icc_eta; the link is
+#'   carried as the attribute \code{"link"}.
 #' @keywords internal
 .icc_bernoulli_info_draws <- function(fit, person_group = NULL,
                                       K = 500, K_facet = 500) {
-  post <- posterior::as_draws_df(fit)
+  vc <- .extract_varcomps_bernoulli(fit, person_group)
+  alpha <- vc$alpha; sd_obj <- vc$sd_obj; sd_facet <- vc$sd_facet
+  S <- length(alpha)
 
-  if (is.null(person_group)) {
-    re_names <- names(brms::ranef(fit))
-    person_group <- re_names[1]
-    message("Using '", person_group, "' as the object grouping factor.")
-  }
+  link    <- .binary_link(fit)
+  invlink <- .inv_link_fun(link)
+  rvar    <- .link_resid_var(link)
 
-  re_names <- names(brms::ranef(fit))
-  other_re <- setdiff(re_names, person_group)
-
-  sd_obj_col <- paste0("sd_", person_group, "__Intercept")
-  if (!sd_obj_col %in% names(post)) {
-    stop("Cannot find object SD column '", sd_obj_col, "' in posterior draws.")
-  }
-  sd_obj <- as.numeric(post[[sd_obj_col]])
-
-  # Sum of other random-effect SDs (treated as a single facet for MC)
-  sd_facet <- rep(0, nrow(post))
-  for (re in other_re) {
-    col <- paste0("sd_", re, "__Intercept")
-    if (col %in% names(post)) {
-      sd_facet <- sqrt(sd_facet^2 + as.numeric(post[[col]])^2)
-    }
-  }
-
-  alpha <- as.numeric(post[["b_Intercept"]])
-  S     <- length(alpha)
-
-  logit_resid_var <- pi^2 / 3
-
-  I_vals  <- numeric(S)
-  icc_I   <- numeric(S)
-  icc_eta <- numeric(S)
+  I_vals <- icc_I <- icc_eta <- numeric(S)
 
   H_bern <- function(p) {
     p <- pmin(pmax(p, 1e-12), 1 - 1e-12)
@@ -181,79 +145,67 @@
   }
 
   for (s in seq_len(S)) {
-    a  <- alpha[s]
-    so <- sd_obj[s]
-    sf <- sd_facet[s]
-
-    u      <- stats::rnorm(K, 0, so)
-    p_cond <- numeric(K)
-    for (k in seq_len(K)) {
-      v         <- stats::rnorm(K_facet, 0, sf)
-      p_cond[k] <- mean(stats::plogis(a + u[k] + v))
+    a  <- alpha[s]; so <- sd_obj[s]; sf <- sd_facet[s]
+    u  <- stats::rnorm(K, 0, so)
+    if (sf > 0) {
+      v      <- matrix(stats::rnorm(K * K_facet, 0, sf), K, K_facet)
+      p_cond <- rowMeans(invlink(a + u + v))
+    } else {
+      p_cond <- invlink(a + u)
     }
-
     p_marg      <- mean(p_cond)
     H_Y         <- H_bern(p_marg)
     H_Y_given_u <- mean(H_bern(p_cond))
-
-    I_val      <- max(H_Y - H_Y_given_u, 0)
-    I_vals[s]  <- I_val
-    icc_I[s]   <- 1 - exp(-2 * I_val)
-    icc_eta[s] <- so^2 / (so^2 + sf^2 + logit_resid_var)
+    I_val       <- max(H_Y - H_Y_given_u, 0)
+    I_vals[s]   <- I_val
+    icc_I[s]    <- 1 - exp(-2 * I_val)
+    icc_eta[s]  <- so^2 / (so^2 + sf^2 + rvar)
   }
 
-  list(I = I_vals, icc_I = icc_I, icc_eta = icc_eta)
+  out <- list(I = I_vals, icc_I = icc_I, icc_eta = icc_eta)
+  attr(out, "link") <- link
+  out
 }
 
+
 # ---------------------------------------------------------------------
-# Crossed-facet response-scale ICC (added v0.2.1)
+# Pure-numeric cores (no brms), so the mathematics can be tested directly
 # ---------------------------------------------------------------------
 
-#' Response-scale ICC core for a binomial GLMM with a crossed facet
+#' Response-scale ICC core for a Bernoulli / binomial GLMM with a facet
 #'
-#' Pure-numeric core, independent of brms, so the mathematics can be
-#' tested directly. The model is
-#' \code{logit(pi) = alpha + u + v} with \code{u ~ N(0, sd_obj^2)} the
-#' object effect and \code{v ~ N(0, sd_facet^2)} the pooled facet
-#' effect, and \code{Y | pi ~ Binomial(nt, pi)}.
+#' Gauss-Hermite quadrature over the object effect u ~ N(0, sd_obj^2)
+#' and the pooled facet effect v ~ N(0, sd_facet^2), with
+#' g(pi) = alpha + u + v and Y | pi ~ Binomial(nt, pi). The object's
+#' universe score on the response scale is the facet-averaged probability E_v(pi given u).
 #'
-#' The object's universe score on the response scale is
-#' \code{E_v[pi | u]}, the expected proportion over the facet universe.
-#' Because the link is nonlinear, the facet contribution does not split
-#' additively into a main effect and an interaction on the link scale,
-#' so both are obtained on the response scale by quadrature:
-#' \code{var_obj} is the variance of object universe scores,
-#' \code{var_facet} the variance of facet marginal means, and
-#' \code{var_int} the remainder of the total variance of pi.
-#'
-#' Two coefficients follow the usual generalizability-theory
-#' conventions. The relative coefficient excludes the facet main effect
-#' from error, and the absolute coefficient includes it:
-#' \deqn{ICC_rel = var_obj / (var_obj + var_int + E[pi(1-pi)]/nt)}
 #' \deqn{ICC_abs = var_obj / (var_obj + var_facet + var_int + E[pi(1-pi)]/nt)}
-#' When \code{sd_facet = 0} both reduce to
-#' \code{var_obj / (var_obj + E[pi(1-pi)]/nt)}, the quantity returned by
-#' versions up to 0.2.0.
+#' \deqn{ICC_rel = var_obj / (var_obj + var_int + E[pi(1-pi)]/nt)}
 #'
-#' Note that the coefficients are identical for proportions and counts,
-#' since an ICC is invariant to multiplying the response by \code{nt}.
+#' With nt = 1 the denominator of ICC_abs is P(1 - P), so ICC_abs equals
+#' the population intraclass kappa (Fleiss) and the phi coefficient under
+#' compound symmetry. For the probit link the exact value is
+#' (Phi_2(z, z; rho) - P^2) / (P(1 - P)) with
+#' z = alpha / sqrt(1 + sd_obj^2 + sd_facet^2) and
+#' rho = sd_obj^2 / (1 + sd_obj^2 + sd_facet^2); the tests check the
+#' quadrature against this closed form.
 #'
-#' @param alpha Numeric. Intercept on the logit scale.
+#' @param alpha Numeric. Intercept on the link scale.
 #' @param sd_obj Numeric. Object random-effect SD.
-#' @param sd_facet Numeric. Pooled facet random-effect SD. Default 0.
+#' @param sd_facet Numeric. Pooled facet SD. Default 0.
 #' @param nt Integer. Binomial trials per observation. Default 1.
 #' @param n_nodes Integer. Quadrature nodes per dimension. Default 40.
-#' @return Named numeric vector with var_obj, var_facet, var_int,
-#'   e_binom, icc_rel, icc_abs, and mean_pi.
+#' @param invlink Function. Inverse link. Default \code{stats::plogis}.
+#' @return Named numeric vector: var_obj, var_facet, var_int, e_binom,
+#'   mean_pi, icc_rel, icc_abs.
 #' @keywords internal
 .binomial_icc_core <- function(alpha, sd_obj, sd_facet = 0, nt = 1,
-                               n_nodes = 40) {
+                               n_nodes = 40, invlink = stats::plogis) {
   gh <- .gh_nodes(n_nodes)
   z <- gh$x; w <- gh$w
 
-  # pi on the object x facet quadrature grid
-  eta <- outer(alpha + sd_obj * z, sd_facet * z, "+")
-  pi_g <- stats::plogis(eta)
+  eta  <- outer(alpha + sd_obj * z, sd_facet * z, "+")
+  pi_g <- invlink(eta)
 
   mu_obj   <- as.vector(pi_g %*% w)            # E_v[pi | u]
   mu_facet <- as.vector(w %*% pi_g)            # E_u[pi | v]
@@ -275,37 +227,32 @@
     icc_abs   = var_obj / (var_obj + var_facet + var_int + e_binom))
 }
 
-#' Nested Monte Carlo information ICC for a binomial GLMM with a facet
+#' Nested Monte Carlo information ICC for a Bernoulli / binomial GLMM
 #'
 #' Conditional entropy is taken given the object effect with the facet
-#' integrated out, which is the quantity Theorem 5 refers to. Used only
-#' when a facet is present; with no facet the closed-form branch of
-#' \code{.icc_binomial_draws} is retained unchanged.
+#' integrated out. Works with sd_facet = 0.
 #'
-#' @param alpha Numeric. Intercept on the logit scale.
+#' @param alpha Numeric. Intercept on the link scale.
 #' @param sd_obj Numeric. Object random-effect SD.
-#' @param sd_facet Numeric. Pooled facet random-effect SD.
+#' @param sd_facet Numeric. Pooled facet SD.
 #' @param nt Integer. Binomial trials per observation.
 #' @param K Integer. Outer object draws. Default 300.
 #' @param M Integer. Inner facet draws per object draw. Default 300.
+#' @param invlink Function. Inverse link. Default \code{stats::plogis}.
 #' @return Numeric information ICC.
 #' @keywords internal
 .binomial_info_facet <- function(alpha, sd_obj, sd_facet, nt,
-                                 K = 300, M = 300) {
+                                 K = 300, M = 300, invlink = stats::plogis) {
   u <- stats::rnorm(K, 0, sd_obj)
-  y_all <- integer(K * M)
-  h_cond <- 0
-  idx <- 0L
-  for (k in seq_len(K)) {
-    v <- stats::rnorm(M, 0, sd_facet)
-    y_k <- stats::rbinom(M, nt, stats::plogis(alpha + u[k] + v))
-    y_all[(idx + 1L):(idx + M)] <- y_k
-    tab_k <- table(y_k) / M
-    h_cond <- h_cond - sum(tab_k * log(tab_k + 1e-30))
-    idx <- idx + M
+  v <- matrix(stats::rnorm(K * M, 0, sd_facet), K, M)
+  p <- invlink(alpha + u + v)                       # K x M
+  supp <- 0:nt
+  pmf_cond <- matrix(0, K, nt + 1)                  # exact pmf of Y | u, facet MC
+  for (j in seq_along(supp)) {
+    pmf_cond[, j] <- rowMeans(stats::dbinom(supp[j], nt, p))
   }
-  h_cond <- h_cond / K
-  tab <- table(y_all) / length(y_all)
-  h_marg <- -sum(tab * log(tab + 1e-30))
+  h_cond   <- mean(-rowSums(pmf_cond * log(pmf_cond + 1e-300)))
+  pmf_marg <- colMeans(pmf_cond)
+  h_marg   <- -sum(pmf_marg * log(pmf_marg + 1e-300))
   1 - exp(-2 * max(h_marg - h_cond, 0))
 }
