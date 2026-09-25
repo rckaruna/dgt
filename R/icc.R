@@ -138,6 +138,29 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
                           hu_slope = pars$hu_slope)
     )
 
+  } else if (family == "gamma") {
+    vc <- .extract_varcomps_gamma(fit, person_group)
+    draws <- .icc_gamma_draws(vc)
+
+    summary_df <- data.frame(
+      measure = c("ICC_eta (link-scale)", "ICC_Y (response-scale, Gamma)",
+                  "ICC_Y (lognormal reference)", "Overestimation (O)"),
+      rbind(
+        .posterior_summary(draws$icc_eta, probs),
+        .posterior_summary(draws$icc_Y, probs),
+        .posterior_summary(draws$icc_Y_lognormal, probs),
+        .posterior_summary(draws$overestimation, probs)
+      )
+    )
+    rownames(summary_df) <- NULL
+
+    result <- list(
+      family   = family,
+      summary  = summary_df,
+      draws    = draws,
+      variance = NULL
+    )
+
   } else if (family == "poisson") {
     draws <- .icc_poisson_draws(fit, person_group, K = K)
     summary_df <- .discrete_summary(draws, probs, "(response-scale, counts)")
