@@ -78,6 +78,20 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
     # Required n for common thresholds
     req_n <- .required_n_from_draws(ds_draws, n_grid, c(0.70, 0.80, 0.90))
 
+  } else if (family == "gamma") {
+
+    vc <- .extract_varcomps_gamma(fit, person_group)
+    ds_draws <- .dstudy_gamma_draws(vc, n_grid)
+    curves <- rbind(
+      .summarize_dstudy_matrix(ds_draws$link,  n_grid, "link-scale", probs),
+      .summarize_dstudy_matrix(ds_draws$arith, n_grid, "response (arith. mean)", probs)
+    )
+    req_n <- do.call(rbind, lapply(c(0.70, 0.80, 0.90), function(thresh) {
+      data.frame(threshold  = thresh,
+                 link_scale = .find_n_threshold(ds_draws$link,  n_grid, thresh),
+                 arith_mean = .find_n_threshold(ds_draws$arith, n_grid, thresh))
+    }))
+
   } else if (family == "hurdle_lognormal") {
 
     pars <- .extract_varcomps_hurdle(fit, person_group)

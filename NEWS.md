@@ -1,3 +1,18 @@
+# dgt 0.5.1
+
+* New family: Gamma with log link. `dgt_icc()` returns the closed-form
+  response-scale ICC of the DGT paper's Gamma Proposition,
+  ICC_Y = (exp(s2p) - 1) / [(exp(s2eta) - 1) + exp(s2eta) / shape],
+  together with the link-scale ICC (linear-predictor convention,
+  s2eta = s2p + s2o, no residual term), the lognormal reference value
+  with the same components, and the overestimation ratio; `dgt_dstudy()`
+  returns the link-scale and response-scale (arithmetic mean) curves and
+  the required n for 0.70, 0.80, 0.90. The information ICC is not yet
+  computed for this family. Requires the `shape` parameter in the
+  posterior (brms `Gamma(link = "log")`); other Gamma links are refused.
+* Pure-numeric tests check the closed form against a Monte Carlo
+  population value and the lognormal limit as shape grows.
+
 # dgt 0.5.0
 
 * Correction for the bernoulli / binomial families. Versions 0.2.0 to
