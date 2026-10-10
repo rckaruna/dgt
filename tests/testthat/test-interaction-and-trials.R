@@ -114,7 +114,7 @@ test_that("the D-study is Spearman-Brown on the per-occasion coefficients and ca
   cc <- dgt:::.binomial_icc_core(a, so, sf, nt, sd_int = si)
   sb <- function(icc, n) n * icc / (1 + (n - 1) * icc)
   expect_equal(as.numeric(ds$response[1, ]), sb(unname(cc[["icc_abs"]]), n_grid), tolerance = 1e-12)
-  icc_eta <- so^2 / (so^2 + sf^2 + si^2 + pi^2 / 3)
+  icc_eta <- so^2 / (so^2 + sf^2 + si^2 + (pi^2 / 3) / nt)
   expect_equal(as.numeric(ds$link[1, ]), sb(icc_eta, n_grid), tolerance = 1e-12)
   # One trial per occasion needs many more occasions than 46 trials per occasion.
   ds1 <- dgt:::.dstudy_bernoulli_draws(alpha = a, sd_obj = so, sd_facet = sf,
@@ -190,4 +190,39 @@ test_that("the handball nine-meter efficiency fit gives the matches reported in 
   ds <- suppressMessages(dgt_dstudy(fit, n_grid = 1:60, person_group = "team", K = 100))
   req <- ds$required_n
   expect_equal(req$response_scale[req$threshold == 0.80], 23L, tolerance = 1)
+})
+
+# ---------------------------------------------------------------------
+# E. 0.6.1: the link-scale coefficient and curve carry the trials too
+# ---------------------------------------------------------------------
+
+test_that("the link-scale curve divides the latent residual by the trials per occasion", {
+  so <- 0.8; sf <- 0.5; si <- 0.4; n_grid <- c(1, 5, 20)
+  sb <- function(icc, n) n * icc / (1 + (n - 1) * icc)
+  for (nt in c(1, 19.22, 46)) {
+    ds <- dgt:::.dstudy_bernoulli_draws(alpha = 0.2, sd_obj = so, sd_facet = sf,
+                                        n_grid = n_grid, K = 10, K_facet = 5,
+                                        nt = nt, sd_int = si)
+    icc_eta <- so^2 / (so^2 + sf^2 + si^2 + (pi^2 / 3) / nt)
+    expect_equal(as.numeric(ds$link[1, ]), sb(icc_eta, n_grid), tolerance = 1e-12)
+  }
+  # nt = 1 is the 0.6.0 (and 0.5.1) curve.
+  ds1 <- dgt:::.dstudy_bernoulli_draws(alpha = 0.2, sd_obj = so, sd_facet = sf,
+                                       n_grid = n_grid, K = 10, K_facet = 5, nt = 1)
+  expect_equal(as.numeric(ds1$link[1, ]), sb(so^2 / (so^2 + sf^2 + pi^2 / 3), n_grid), tolerance = 1e-12)
+})
+
+test_that("the handball link-scale curve reaches 0.70 within the match range once trials count", {
+  path <- Sys.getenv("DGT_HANDBALL_FIT", unset = "")
+  skip_if(path == "" || !file.exists(path))
+  fit <- readRDS(path)
+  ds <- suppressMessages(dgt_dstudy(fit, n_grid = 1:60, person_group = "team", K = 100))
+  req <- ds$required_n
+  expect_false(is.na(req$link_scale[req$threshold == 0.70]))
+  expect_lt(req$link_scale[req$threshold == 0.70], 60)
+  # and the ICC's own link-scale coefficient agrees with the curve at n = 1
+  icc <- suppressMessages(dgt_icc(fit, person_group = "team", K = 100))
+  expect_equal(median(icc$draws$icc_eta),
+               ds$curves$median[ds$curves$type == "link-scale" & ds$curves$n == 1],
+               tolerance = 1e-10)
 })

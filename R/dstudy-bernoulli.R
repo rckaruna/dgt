@@ -8,7 +8,7 @@
 # observation of nt binomial trials with its own draws of v and w;
 # replicating the occasion n times and averaging gives three curves:
 #
-#   link-scale     Spearman-Brown of icc_eta = sd_obj^2 / (sd_obj^2 + sd_facet^2 + sd_int^2 + resid_var)
+#   link-scale     Spearman-Brown of icc_eta = sd_obj^2 / (sd_obj^2 + sd_facet^2 + sd_int^2 + resid_var/nt)
 #   response-scale Spearman-Brown of the absolute per-occasion ICC_Y of
 #                  .binomial_icc_core() (Theorem 3 of the DGT paper: the
 #                  Spearman-Brown D-study holds on the response scale for
@@ -43,8 +43,9 @@
 #' @param seed Integer or NULL. Random seed.
 #' @param invlink Function. Inverse link read from the fit by the caller;
 #'   default \code{stats::plogis}.
-#' @param resid_var Numeric. Link-scale residual variance for the
-#'   link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).
+#' @param resid_var Numeric. Link-scale residual variance of one trial
+#'   (pi^2/3 logit, 1 probit, pi^2/6 cloglog); divided by \code{nt} for
+#'   the per-occasion coefficient.
 #' @param nt Numeric. Trials per occasion (the harmonic mean when they
 #'   vary; rounded for the information curve). Default 1.
 #' @param sd_int Numeric vector. Posterior draws of the pooled
@@ -81,8 +82,11 @@
     sf <- sd_facet[s]
     si <- sd_int[s]
 
-    # --- link-scale curve: Spearman-Brown of the absolute link-scale ICC
-    icc_eta <- so^2 / (so^2 + sf^2 + si^2 + resid_var)
+    # --- link-scale curve: Spearman-Brown of the absolute link-scale ICC,
+    # whose residual is the latent-response variance of one trial divided
+    # by the trials per occasion (0.6.0 divided by nothing, so n counted
+    # single trials on this curve).
+    icc_eta <- so^2 / (so^2 + sf^2 + si^2 + resid_var / nt)
     link_mat[s, ] <- sb(icc_eta, n_grid)
 
     # --- response-scale curve: Spearman-Brown of the absolute per-occasion ICC

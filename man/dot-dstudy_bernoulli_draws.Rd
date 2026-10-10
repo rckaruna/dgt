@@ -45,8 +45,9 @@ the expensive part; default \code{FALSE}.}
 \item{invlink}{Function. Inverse link read from the fit by the caller;
 default \code{stats::plogis}.}
 
-\item{resid_var}{Numeric. Link-scale residual variance for the
-link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).}
+\item{resid_var}{Numeric. Link-scale residual variance of one trial
+(pi^2/3 logit, 1 probit, pi^2/6 cloglog); divided by \code{nt} for
+the per-occasion coefficient.}
 
 \item{nt}{Numeric. Trials per occasion (the harmonic mean when they
 vary; rounded for the information curve). Default 1.}
