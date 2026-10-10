@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{.detect_n_trials}
 \alias{.detect_n_trials}
-\title{Detect the number of binomial trials from a brms fit}
+\title{Detect the binomial trials of a brms fit}
 \usage{
 .detect_n_trials(fit)
 }
@@ -10,12 +10,24 @@
 \item{fit}{A brms model fit.}
 }
 \value{
-Integer number of trials, or NULL if not determinable.
+NULL, or a list with \code{n_h} (harmonic mean, a double),
+\code{values} (the observed trials, one per observation),
+\code{constant} (logical), and \code{n} (the common value when
+constant, otherwise \code{n_h}).
 }
 \description{
-brms stores the trials variable alongside the response for a
-\code{y | trials(n)} specification. This helper looks for it and
-returns NULL when it cannot be determined, so that callers can warn
-rather than silently assume a single trial.
+For a \code{y | trials(n)} specification brms carries the trials in
+its Stan data as \code{trials}; the original column name is whatever
+the user wrote, so the Stan data is read first and the model frame
+(columns named \code{vint1} or \code{trials}, as list-like fixtures in
+the tests use) second. Returns NULL when neither is available, so
+that callers warn rather than silently assume one trial.
+}
+\details{
+When the trials vary across observations the summary that reproduces
+the pooled binomial sampling variance is their harmonic mean: for
+trials \eqn{n_i} the average sampling variance is
+\eqn{E[\pi(1-\pi)]\, \mathrm{mean}(1/n_i) = E[\pi(1-\pi)]/n_h}. Versions
+up to 0.5.1 fell back to one trial in that case.
 }
 \keyword{internal}

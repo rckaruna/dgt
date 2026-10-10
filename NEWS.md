@@ -1,3 +1,43 @@
+# dgt 0.6.0
+
+Three corrections for the bernoulli / binomial families, found when the
+package was run on binomial GLMMs of handball shooting indicators with
+`num | trials(den) ~ 1 + (1|team) + (1|game) + (1|team:game)`. None of
+them changes a single-trial fit with crossed object and facet main
+effects only, which is every Bernoulli analysis in the DGT paper.
+
+* Object-by-facet terms. Every random intercept other than the object
+  used to be pooled into one facet class, so a term such as `team:game`
+  was removed from the error of the relative coefficient. Random
+  intercepts are now classified by `.classify_re()`: a grouping name
+  that contains the object factor (split on `:`) is an object-by-facet
+  interaction and stays in the error of both coefficients; every other
+  term is a facet. The quadrature core takes a third dimension for the
+  interaction class. The absolute and information coefficients are
+  unchanged by the classification (the pooled normal is the same);
+  only `icc_Y_rel` moves, downward. A new `icc_eta_rel` reports the
+  relative convention on the link scale. The Poisson closed forms get
+  the same classification.
+* Varying trials. `dgt_icc()` fell back to one trial, with a warning,
+  whenever the trials differed across observations. The sampling term
+  now uses the harmonic mean of the observed trials, which reproduces
+  the average binomial sampling variance exactly
+  (E[pi(1 - pi)] mean(1/n_i) = E[pi(1 - pi)]/n_h), and the information
+  ICC is averaged over the observed trial counts. Trials are read from
+  the Stan data (`trials`), so the response column can have any name.
+* D-study. `dgt_dstudy()` computed the bernoulli / binomial curves with
+  one trial per occasion whatever the fit's trials, so for a binomial
+  fit n counted single trials. The link-scale and response-scale curves
+  are now Spearman-Brown on the per-occasion coefficients of
+  `dgt_icc()` (Theorem 3 of the DGT paper), with n counting occasions
+  of the fitted data's trials; the information curve uses the n-fold
+  convolution of the per-occasion conditional pmf. `dgt_dstudy()` gains
+  `n_trials`.
+* `dgt_info_icc()` documentation no longer lists the Gamma family as
+  analytic; the function does not support Gamma fits.
+* `dgt_icc()` results for bernoulli / binomial fits carry `n_trials`,
+  `trials`, and `re_classes`, which `print()` reports.
+
 # dgt 0.5.1
 
 * New family: Gamma with log link. `dgt_icc()` returns the closed-form

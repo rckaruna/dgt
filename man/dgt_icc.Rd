@@ -25,8 +25,14 @@ If NULL (default), uses the first random effect.}
 \item{K}{Integer. Number of simulated persons per posterior draw
 (hurdle models only). Default 5000.}
 
-\item{n_trials}{Integer. Binomial trials per observation. If NULL,
-detected from the model where possible.}
+\item{n_trials}{Numeric. Binomial trials per observation. If NULL,
+detected from the fit: the common value when the trials are
+constant, their harmonic mean when they vary (which reproduces the
+average binomial sampling variance; a message says so). A value
+supplied here overrides detection. Random intercepts other than
+\code{person_group} are facets, or object-by-facet interactions when
+their grouping name contains the object factor (\code{team:game});
+the latter stay in the error of the relative coefficient.}
 
 \item{probs}{Numeric vector of length 2. Quantile probabilities for
 credible intervals. Default c(0.025, 0.975).}

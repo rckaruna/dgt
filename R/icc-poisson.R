@@ -18,13 +18,16 @@
 .icc_poisson_draws <- function(fit, person_group = NULL, K = 5000) {
   post <- posterior::as_draws_df(fit)
 
-  re <- .extract_re_sds(fit, person_group)
+  re <- .classify_re(fit, person_group)
   person_group <- re$person_group
   sigma_p <- re$sd_obj
-  sd_facet <- re$sd_facet
+  sd_facet <- re$sd_facet            # facet class
+  sd_int   <- re$sd_int              # object-by-facet class
+  sd_pool  <- re$sd_pooled
   mu <- as.numeric(post[["b_Intercept"]])
   s2p <- sigma_p^2
   s2f <- sd_facet^2
+  s2i <- sd_int^2
   S <- length(mu)
 
   # With a crossed facet the log-normal mixture gives closed forms for
@@ -36,19 +39,27 @@
   #   var_int   = exp(2mu + s2p + s2f)(exp(s2p) - 1)(exp(s2f) - 1)
   # and the Poisson sampling variance is E[lambda]. Setting s2f = 0
   # recovers the pre-0.2.1 formulas exactly.
-  if (any(sd_facet > 0)) {
-    base    <- exp(2 * mu + s2p + s2f)
-    E_lam   <- exp(mu + (s2p + s2f) / 2)
+  # With an object-by-facet class w ~ N(0, s2i) the object universe score
+  # is E_{v,w}[lambda | u] = exp(mu + u + (s2f + s2i)/2), so var_obj and
+  # the total variance are those of the pooled model, var_facet keeps the
+  # facet class only, and var_int = var_tot - var_obj - var_facet holds the
+  # object-by-facet variance with the lognormal interaction. Versions up to
+  # 0.5.1 pooled w into v, which overstated the relative coefficient.
+  if (any(sd_pool > 0)) {
+    s2t     <- s2p + s2f + s2i
+    base    <- exp(2 * mu + s2t)
+    E_lam   <- exp(mu + s2t / 2)
     v_obj   <- base * (exp(s2p) - 1)
     v_facet <- base * (exp(s2f) - 1)
-    v_int   <- base * (exp(s2p) - 1) * (exp(s2f) - 1)
+    v_tot   <- base * (exp(s2t) - 1)
+    v_int   <- pmax(v_tot - v_obj - v_facet, 0)
 
     icc_rel <- v_obj / (v_obj + v_int + E_lam)
     icc_abs <- v_obj / (v_obj + v_facet + v_int + E_lam)
 
     icc_I <- numeric(S)
     for (s in seq_len(S)) {
-      icc_I[s] <- .poisson_info_facet(mu[s], sigma_p[s], sd_facet[s])
+      icc_I[s] <- .poisson_info_facet(mu[s], sigma_p[s], sd_pool[s])
     }
 
     return(data.frame(icc_Y      = icc_rel,

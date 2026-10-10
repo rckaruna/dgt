@@ -19,10 +19,14 @@
 probit, cloglog or cauchit link).}
 
 \item{person_group}{Character. Grouping factor that is the object of
-measurement. Any other random intercept is a facet.}
+measurement. Other random intercepts are facets, or object-by-facet
+interactions when their grouping name contains the object factor
+(see \code{\link{.classify_re}}).}
 
-\item{n_trials}{Integer. Trials per observation; detected from the
-model when NULL.}
+\item{n_trials}{Numeric. Trials per observation. Detected from the
+model when NULL: the common value when the trials are constant, their
+harmonic mean when they vary (with a message). A value supplied here
+overrides detection and is also used for the information ICC.}
 
 \item{K}{Integer. Outer Monte Carlo draws (objects) per posterior
 draw for the information ICC. Default 300.}
@@ -37,8 +41,10 @@ identical for proportions and counts.}
 }
 \value{
 Data frame, one row per posterior draw, with columns icc_Y
-(absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale), icc_I,
-var_obj, var_facet, var_int, mean_pi.
+(absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute),
+icc_eta_rel, icc_I, var_obj, var_facet, var_int, mean_pi. Attributes
+\code{link}, \code{n_trials} (the value used in the sampling term),
+\code{trials} (the detection result), and \code{re_classes}.
 }
 \description{
 Compute Bernoulli / binomial ICC draws

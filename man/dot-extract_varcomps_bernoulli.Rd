@@ -14,11 +14,14 @@ measurement. If NULL, the first random effect is used.}
 }
 \value{
 List with numeric vectors \code{alpha}, \code{sd_obj},
-\code{sd_facet}, and character \code{person_group}.
+\code{sd_facet}, \code{sd_int}, \code{sd_pooled}, character
+\code{person_group}, and the classification \code{facet_terms},
+\code{int_terms}.
 }
 \description{
-Returns posterior draws of the intercept, the object SD, and the pooled
-SD of all other random intercepts. Mirrors the extraction used by
-\code{.icc_bernoulli_info_draws()} so the two are consistent.
+Returns posterior draws of the intercept and the classified
+random-effect SDs of \code{\link{.classify_re}}: the object SD, the
+pooled facet SD, the pooled object-by-facet SD, and the SD of the two
+pooled together.
 }
 \keyword{internal}

@@ -19,7 +19,7 @@
 
 \item{sd_obj}{Numeric. Object random-effect SD.}
 
-\item{sd_facet}{Numeric. Pooled facet SD.}
+\item{sd_facet}{Numeric. Pooled SD of all non-object random effects.}
 
 \item{nt}{Integer. Binomial trials per observation.}
 
@@ -33,7 +33,6 @@
 Numeric information ICC.
 }
 \description{
-Conditional entropy is taken given the object effect with the facet
-integrated out. Works with sd_facet = 0.
+\code{1 - exp(-2 I)} with \code{I} from \code{\link{.binomial_info_I}}.
 }
 \keyword{internal}

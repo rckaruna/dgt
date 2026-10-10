@@ -124,22 +124,37 @@
 # Crossed-facet support (added v0.2.1)
 # ---------------------------------------------------------------------
 
-#' Extract object and facet random-effect SDs from a brms fit
+#' Classify the random intercepts of a brms fit
 #'
-#' Factors out the pattern repeated across the family-specific ICC
-#' estimators: identify the grouping factor that is the object of
-#' measurement, and pool every remaining grouping factor into a single
-#' facet standard deviation on the link scale. Pooling is valid because
-#' independent Gaussian random effects on the link scale sum to a
-#' Gaussian with variance equal to the sum of variances.
+#' Every grouping term of the fit other than the object of measurement
+#' is either a facet or an object-by-facet interaction, and the two play
+#' different roles in the relative coefficient. A term whose grouping
+#' name, split on \code{":"}, contains the object factor (\code{team:game}
+#' for object \code{team}) is an interaction: its variance belongs to the
+#' error of both the relative and the absolute coefficient, because it
+#' cannot be held fixed across the two observations being correlated.
+#' Every other term (facet main effects such as \code{game} or
+#' \code{item}, and facet-by-facet interactions such as \code{rater:item})
+#' is a facet: removed from the error of the relative coefficient, kept
+#' in the error of the absolute one. Versions up to 0.5.1 pooled every
+#' non-object term into the facet class, which left the absolute and
+#' information coefficients unchanged but overstated the relative
+#' coefficient whenever an object-by-facet term was fitted.
+#'
+#' Pooling within a class is valid because independent Gaussian random
+#' effects on the link scale sum to a Gaussian with the summed variance.
 #'
 #' @param fit A brms model fit.
 #' @param person_group Character or NULL. Object grouping factor. If
 #'   NULL, the first random effect is used.
-#' @return List with elements person_group, sd_obj, sd_facet (numeric
-#'   vectors, one entry per posterior draw), and other_re.
+#' @return List with elements person_group, sd_obj, sd_facet (pooled
+#'   facet SD), sd_int (pooled object-by-facet SD), sd_pooled (SD of
+#'   facet and interaction together), facet_terms, int_terms (character
+#'   vectors of grouping names), and other_re (all non-object terms).
+#'   The SD elements are numeric vectors with one entry per posterior
+#'   draw.
 #' @keywords internal
-.extract_re_sds <- function(fit, person_group = NULL) {
+.classify_re <- function(fit, person_group = NULL) {
   post <- posterior::as_draws_df(fit)
   re_names <- names(brms::ranef(fit))
 
@@ -154,17 +169,45 @@
   }
   sd_obj <- as.numeric(post[[sd_obj_col]])
 
-  other_re <- setdiff(re_names, person_group)
-  s2_facet <- rep(0, length(sd_obj))
-  for (re in other_re) {
-    col <- paste0("sd_", re, "__Intercept")
-    if (col %in% names(post)) s2_facet <- s2_facet + as.numeric(post[[col]])^2
+  other_re  <- setdiff(re_names, person_group)
+  is_int    <- vapply(strsplit(other_re, ":", fixed = TRUE),
+                      function(parts) person_group %in% parts, logical(1))
+  int_terms   <- other_re[is_int]
+  facet_terms <- other_re[!is_int]
+
+  pooled_sd <- function(terms) {
+    s2 <- rep(0, length(sd_obj))
+    for (re in terms) {
+      col <- paste0("sd_", re, "__Intercept")
+      if (col %in% names(post)) s2 <- s2 + as.numeric(post[[col]])^2
+    }
+    sqrt(s2)
   }
+  sd_facet <- pooled_sd(facet_terms)
+  sd_int   <- pooled_sd(int_terms)
 
   list(person_group = person_group,
        sd_obj       = sd_obj,
-       sd_facet     = sqrt(s2_facet),
+       sd_facet     = sd_facet,
+       sd_int       = sd_int,
+       sd_pooled    = sqrt(sd_facet^2 + sd_int^2),
+       facet_terms  = facet_terms,
+       int_terms    = int_terms,
        other_re     = other_re)
+}
+
+#' Extract object and facet random-effect SDs from a brms fit
+#'
+#' Kept for the callers written against 0.5.1; it is
+#' \code{\link{.classify_re}} under its old name, so \code{sd_facet} now
+#' holds the facet class only and \code{sd_int} the object-by-facet
+#' class. Callers that need the two together use \code{sd_pooled}.
+#'
+#' @inheritParams .classify_re
+#' @return See \code{\link{.classify_re}}.
+#' @keywords internal
+.extract_re_sds <- function(fit, person_group = NULL) {
+  .classify_re(fit, person_group)
 }
 
 #' Gauss-Hermite nodes and weights for the standard normal
@@ -188,24 +231,49 @@
   list(x = e$values[ord], w = (e$vectors[1, ord])^2)
 }
 
-#' Detect the number of binomial trials from a brms fit
+#' Detect the binomial trials of a brms fit
 #'
-#' brms stores the trials variable alongside the response for a
-#' \code{y | trials(n)} specification. This helper looks for it and
-#' returns NULL when it cannot be determined, so that callers can warn
-#' rather than silently assume a single trial.
+#' For a \code{y | trials(n)} specification brms carries the trials in
+#' its Stan data as \code{trials}; the original column name is whatever
+#' the user wrote, so the Stan data is read first and the model frame
+#' (columns named \code{vint1} or \code{trials}, as list-like fixtures in
+#' the tests use) second. Returns NULL when neither is available, so
+#' that callers warn rather than silently assume one trial.
+#'
+#' When the trials vary across observations the summary that reproduces
+#' the pooled binomial sampling variance is their harmonic mean: for
+#' trials \eqn{n_i} the average sampling variance is
+#' \eqn{E[\pi(1-\pi)]\, \mathrm{mean}(1/n_i) = E[\pi(1-\pi)]/n_h}. Versions
+#' up to 0.5.1 fell back to one trial in that case.
 #'
 #' @param fit A brms model fit.
-#' @return Integer number of trials, or NULL if not determinable.
+#' @return NULL, or a list with \code{n_h} (harmonic mean, a double),
+#'   \code{values} (the observed trials, one per observation),
+#'   \code{constant} (logical), and \code{n} (the common value when
+#'   constant, otherwise \code{n_h}).
 #' @keywords internal
 .detect_n_trials <- function(fit) {
-  dat <- tryCatch(fit$data, error = function(e) NULL)
-  if (is.null(dat)) return(NULL)
-  cand <- grep("^(vint1|trials)", names(dat), value = TRUE)
-  if (length(cand) == 0) return(NULL)
-  v <- dat[[cand[1]]]
-  if (!is.numeric(v) || length(unique(v)) != 1L) return(NULL)
-  as.integer(v[1])
+  v <- NULL
+  if (inherits(fit, "brmsfit")) {
+    sdat <- tryCatch(brms::standata(fit), error = function(e) NULL)
+    if (!is.null(sdat) && !is.null(sdat$trials)) v <- as.numeric(sdat$trials)
+  }
+  if (is.null(v)) {
+    dat <- tryCatch(fit$data, error = function(e) NULL)
+    if (is.null(dat)) return(NULL)
+    cand <- grep("^(vint1|trials)", names(dat), value = TRUE)
+    if (length(cand) == 0) return(NULL)
+    v <- dat[[cand[1]]]
+    if (!is.numeric(v)) return(NULL)
+  }
+  v <- v[is.finite(v) & v > 0]
+  if (length(v) == 0) return(NULL)
+  n_h <- 1 / mean(1 / v)
+  constant <- length(unique(v)) == 1L
+  list(n_h      = n_h,
+       values   = v,
+       constant = constant,
+       n        = if (constant) as.integer(v[1]) else n_h)
 }
 
 

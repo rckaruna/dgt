@@ -96,9 +96,17 @@ test_that("Poisson closed forms match simulation and reduce correctly", {
   expect_equal(exp(mu + sp^2 / 2), exp(mu + sp^2 / 2))
 })
 
-test_that("trials detection returns NULL rather than guessing", {
+test_that("trials detection returns NULL rather than guessing, and the harmonic mean when trials vary", {
   expect_null(.detect_n_trials(list(data = data.frame(y = 1:5))))
-  expect_equal(.detect_n_trials(list(data = data.frame(y = 1:5, vint1 = rep(8, 5)))), 8L)
-  # Varying trials cannot be summarised by a single number.
-  expect_null(.detect_n_trials(list(data = data.frame(y = 1:5, vint1 = 1:5))))
+  tr <- .detect_n_trials(list(data = data.frame(y = 1:5, vint1 = rep(8, 5))))
+  expect_true(tr$constant)
+  expect_equal(tr$n, 8L)
+  expect_equal(tr$n_h, 8)
+  # Varying trials: the pooled sampling term needs the harmonic mean
+  # (E[pi(1-pi)] mean(1/n_i) = E[pi(1-pi)] / n_h), not a single trial.
+  tr <- .detect_n_trials(list(data = data.frame(y = 1:5, vint1 = c(5, 10, 40, 10, 5))))
+  expect_false(tr$constant)
+  expect_equal(tr$n_h, 1 / mean(1 / c(5, 10, 40, 10, 5)))
+  expect_equal(tr$n, tr$n_h)
+  expect_equal(sort(unique(tr$values)), c(5, 10, 40))
 })

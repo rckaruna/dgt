@@ -25,8 +25,14 @@
 #' @param fit A brms model fit object.
 #' @param person_group Character. Name of the person-level grouping factor.
 #'   If NULL (default), uses the first random effect.
-#' @param n_trials Integer. Binomial trials per observation. If NULL,
-#'   detected from the model where possible.
+#' @param n_trials Numeric. Binomial trials per observation. If NULL,
+#'   detected from the fit: the common value when the trials are
+#'   constant, their harmonic mean when they vary (which reproduces the
+#'   average binomial sampling variance; a message says so). A value
+#'   supplied here overrides detection. Random intercepts other than
+#'   \code{person_group} are facets, or object-by-facet interactions when
+#'   their grouping name contains the object factor (\code{team:game});
+#'   the latter stay in the error of the relative coefficient.
 #' @param K Integer. Number of simulated persons per posterior draw
 #'   (hurdle models only). Default 5000.
 #' @param probs Numeric vector of length 2. Quantile probabilities for
@@ -177,11 +183,14 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
     summary_df <- .discrete_summary(draws, probs, "(response-scale)")
 
     result <- list(
-      family   = family,
-      link     = attr(draws, "link"),
-      summary  = summary_df,
-      draws    = draws,
-      variance = NULL
+      family     = family,
+      link       = attr(draws, "link"),
+      n_trials   = attr(draws, "n_trials"),
+      trials     = attr(draws, "trials"),
+      re_classes = attr(draws, "re_classes"),
+      summary    = summary_df,
+      draws      = draws,
+      variance   = NULL
     )
 
   } else {
