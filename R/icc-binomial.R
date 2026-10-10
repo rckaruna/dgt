@@ -57,7 +57,8 @@
 #'   identical for proportions and counts.
 #' @param n_nodes Integer. Gauss-Hermite nodes per dimension. Default 40.
 #' @return Data frame, one row per posterior draw, with columns icc_Y
-#'   (absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute),
+#'   (absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute, with
+#'   the latent residual variance divided by the trials per observation),
 #'   icc_eta_rel, icc_I, var_obj, var_facet, var_int, mean_pi. Attributes
 #'   \code{link}, \code{n_trials} (the value used in the sampling term),
 #'   \code{trials} (the detection result), and \code{re_classes}.
@@ -145,8 +146,12 @@
     v_facet[s] <- cc[["var_facet"]]
     v_int[s]   <- cc[["var_int"]]
     mean_pi[s] <- cc[["mean_pi"]]
-    icc_eta[s]     <- tau[s]^2 / (tau[s]^2 + sd_pool[s]^2 + rvar)
-    icc_eta_rel[s] <- tau[s]^2 / (tau[s]^2 + sd_int[s]^2 + rvar)
+    # Link scale: the residual term is the latent-response variance of one
+    # trial (pi^2/3 logit, 1 probit, ...); an observation of nt trials
+    # averages nt independent latent residuals, so the per-observation
+    # residual is rvar/nt. Version 0.6.0 used rvar whatever the trials.
+    icc_eta[s]     <- tau[s]^2 / (tau[s]^2 + sd_pool[s]^2 + rvar / nt)
+    icc_eta_rel[s] <- tau[s]^2 / (tau[s]^2 + sd_int[s]^2 + rvar / nt)
     I_s <- 0
     for (j in seq_along(nt_values)) {
       I_s <- I_s + nt_weights[j] *
@@ -200,6 +205,8 @@
   link    <- .binary_link(fit)
   invlink <- .inv_link_fun(link)
   rvar    <- .link_resid_var(link)
+  trials  <- .detect_n_trials(fit)
+  nt      <- if (is.null(trials)) 1 else trials$n
 
   I_vals <- icc_I <- icc_eta <- numeric(S)
 
@@ -223,7 +230,7 @@
     I_val       <- max(H_Y - H_Y_given_u, 0)
     I_vals[s]   <- I_val
     icc_I[s]    <- 1 - exp(-2 * I_val)
-    icc_eta[s]  <- so^2 / (so^2 + sf^2 + rvar)
+    icc_eta[s]  <- so^2 / (so^2 + sf^2 + rvar / nt)
   }
 
   out <- list(I = I_vals, icc_I = icc_I, icc_eta = icc_eta)

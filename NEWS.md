@@ -1,3 +1,17 @@
+# dgt 0.6.1
+
+* Link-scale coefficient for binomial fits. `dgt_icc()`'s `icc_eta` and
+  `icc_eta_rel`, `dgt_info_icc()`'s `icc_eta`, and the link-scale curve
+  of `dgt_dstudy()` used the latent residual variance of a single trial
+  (pi^2/3 for the logit link) whatever the trials per observation, so on
+  that scale a binomial occasion was still treated as one trial and the
+  D-study's n counted single shots (nine-meter handball efficiency: 0.70
+  reported at 162 matches). The residual is now divided by the trials
+  per observation (the harmonic mean when they vary), the latent-response
+  variance of the mean of that many independent trials. Single-trial
+  fits are unchanged. The response-scale and information coefficients
+  were already correct in 0.6.0.
+
 # dgt 0.6.0
 
 Three corrections for the bernoulli / binomial families, found when the

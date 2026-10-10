@@ -41,7 +41,8 @@ identical for proportions and counts.}
 }
 \value{
 Data frame, one row per posterior draw, with columns icc_Y
-(absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute),
+(absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute, with
+the latent residual variance divided by the trials per observation),
 icc_eta_rel, icc_I, var_obj, var_facet, var_int, mean_pi. Attributes
 \code{link}, \code{n_trials} (the value used in the sampling term),
 \code{trials} (the detection result), and \code{re_classes}.
