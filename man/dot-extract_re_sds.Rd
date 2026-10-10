@@ -13,15 +13,12 @@
 NULL, the first random effect is used.}
 }
 \value{
-List with elements person_group, sd_obj, sd_facet (numeric
-vectors, one entry per posterior draw), and other_re.
+See \code{\link{.classify_re}}.
 }
 \description{
-Factors out the pattern repeated across the family-specific ICC
-estimators: identify the grouping factor that is the object of
-measurement, and pool every remaining grouping factor into a single
-facet standard deviation on the link scale. Pooling is valid because
-independent Gaussian random effects on the link scale sum to a
-Gaussian with variance equal to the sum of variances.
+Kept for the callers written against 0.5.1; it is
+\code{\link{.classify_re}} under its old name, so \code{sd_facet} now
+holds the facet class only and \code{sd_int} the object-by-facet
+class. Callers that need the two together use \code{sd_pooled}.
 }
 \keyword{internal}

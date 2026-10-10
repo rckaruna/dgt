@@ -15,14 +15,20 @@ dgt_dstudy(
   seed = NULL,
   thin = 1L,
   exposure_var = NULL,
-  ref_exposure = NULL
+  ref_exposure = NULL,
+  n_trials = NULL
 )
 }
 \arguments{
 \item{fit}{A brms model fit object.}
 
 \item{n_grid}{Integer vector. Numbers of occasions to evaluate.
-Default \code{1:50}.}
+Default \code{1:50}. For Bernoulli and binomial fits an occasion is
+one observation of the fitted data (all of its trials, with new
+draws of every facet and object-by-facet effect), and the curves
+are Spearman-Brown on the per-occasion coefficients of
+\code{\link{dgt_icc}} (Theorem 3 of the DGT paper); n never counts
+single trials.}
 
 \item{person_group}{Character. Name of the person grouping factor.}
 
@@ -44,6 +50,10 @@ expensive curve; default \code{FALSE}.}
 
 \item{thin, exposure_var, ref_exposure}{Hurdle counts only; see
 \code{\link{dgt_icc}}.}
+
+\item{n_trials}{Numeric. Bernoulli/binomial only: trials per
+occasion. Detected from the fit when NULL (the harmonic mean when
+the trials vary); see \code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_dstudy"} containing:

@@ -44,16 +44,22 @@ computed via Monte Carlo entropy estimation and is strictly less than
 the link-scale ICC (Theorem 5a).
 }
 \details{
-For models with invertible link functions (lognormal, Gamma with log
-link), the mutual information is computed analytically:
+For the lognormal family, whose observation is an invertible
+transformation of a Gaussian, the mutual information is computed
+analytically:
 \deqn{I(\nu_p; Y) = \frac{1}{2}\ln(\sigma^2_\eta / \sigma^2_e)}
 and \eqn{\text{ICC}_I = 1 - \exp(-2I) = \sigma^2_p / \sigma^2_\eta = \text{ICC}_\eta}.
 
 For discrete models (Bernoulli, binomial, Poisson) and hurdle models,
 the mutual information is estimated via nested Monte Carlo: an outer
-draw over the object random effect, an inner draw over the facet
-random effect, producing a posterior-averaged estimate of
-\eqn{I(\nu_p; Y)}. The information ICC is strictly less than the
-link-scale ICC in these cases, reflecting the data processing
-inequality applied to the discrete sampling step.
+draw over the object random effect, an inner draw over every other
+random effect (facets and object-by-facet terms pooled), producing a
+posterior-averaged estimate of \eqn{I(\nu_p; Y)}. The information ICC
+is strictly less than the link-scale ICC in these cases, reflecting
+the data processing inequality applied to the discrete sampling step.
+The Gamma family is not supported by this function: its observation is
+a stochastic, non-invertible function of the linear predictor, so the
+analytic shortcut does not apply and no Monte Carlo estimator is
+implemented yet (\code{dgt_icc()} reports the link-scale and
+response-scale coefficients for Gamma fits).
 }

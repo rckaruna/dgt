@@ -19,6 +19,18 @@ print.dgt_icc <- function(x, digits = 3, ...) {
     if (identical(x$link, "probit")) {
       cat("  Under the probit link ICC_eta is the tetrachoric correlation.\n")
     }
+    if (!is.null(x$n_trials)) {
+      if (!is.null(x$trials) && !x$trials$constant) {
+        cat(sprintf("  Trials vary (%g to %g); sampling term uses their harmonic mean, %.2f.\n",
+                    min(x$trials$values), max(x$trials$values), x$n_trials))
+      } else {
+        cat(sprintf("  Trials per observation: %g.\n", x$n_trials))
+      }
+    }
+    if (!is.null(x$re_classes) && length(x$re_classes$interaction) > 0) {
+      cat("  Object-by-facet term(s) in the error of both coefficients:",
+          paste(x$re_classes$interaction, collapse = ", "), "\n")
+    }
   }
 
   if (!is.null(x$variance)) {

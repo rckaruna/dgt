@@ -44,21 +44,23 @@ test_that("both curves are non-decreasing in n and approach 1", {
 })
 
 
-test_that("response-scale ICC at n=1 equals the binomial engagement ICC", {
-  # With no facet variance, pi_obj = plogis(alpha + u) exactly, and the
-  # n = 1 response-scale ICC must equal Var(pi)/(Var(pi) + E[pi(1-pi)]),
-  # the same quantity .icc_binomial_draws() computes with n_trials = 1.
-  set.seed(4)
-  so <- 1.1; a <- -0.2; K <- 20000
-  u <- rnorm(K, 0, so); p <- plogis(a + u)
-  ref <- var(p) / (var(p) + mean(p * (1 - p)))
-
+test_that("response-scale ICC at n=1 equals the absolute coefficient of the core", {
+  # Since 0.6.0 the response-scale curve is Spearman-Brown on the
+  # absolute per-occasion coefficient of .binomial_icc_core(), so at
+  # n = 1 the two are the same number, and no Monte Carlo enters.
+  so <- 1.1; a <- -0.2
   out <- dgt:::.dstudy_bernoulli_draws(
-    alpha = a, sd_obj = so, sd_facet = 0, n_grid = 1,
-    K = K, K_facet = 1, seed = 4
+    alpha = a, sd_obj = so, sd_facet = 0, n_grid = c(1, 7),
+    K = 50, K_facet = 1, seed = 4
   )
-  # Same seed, same K, sd_facet = 0 path draws u identically.
-  expect_equal(out$response[1, 1], ref, tolerance = 1e-8)
+  cc <- dgt:::.binomial_icc_core(a, so, 0, 1)
+  expect_equal(out$response[1, 1], unname(cc[["icc_abs"]]), tolerance = 1e-12)
+  sb <- 7 * cc[["icc_abs"]] / (1 + 6 * cc[["icc_abs"]])
+  expect_equal(out$response[1, 2], unname(sb), tolerance = 1e-12)
+  # And the pre-0.6.0 formula is the same curve at one trial per occasion.
+  set.seed(4); u <- rnorm(20000, 0, so); p <- plogis(a + u)
+  old <- var(p) / (var(p) + mean(p * (1 - p)))
+  expect_equal(out$response[1, 1], old, tolerance = 2e-2)
 })
 
 

@@ -1,38 +1,43 @@
-# dstudy-bernoulli.R — D-study curves for Bernoulli / binomial GLMMs
+# dstudy-bernoulli.R -- D-study curves for Bernoulli / binomial GLMMs
 #
 # Extends dgt_dstudy() to the Bernoulli / binomial families (logit,
 # probit, cloglog or cauchit link; the link is read from the fit).
 # The object of measurement has a random intercept u ~ N(0, sd_obj^2);
-# every other random effect is treated as a facet whose effect v is
-# integrated out. Replicating the measurement n times (n tasks, n items,
-# n occasions) and averaging gives three D-study curves:
+# the facet terms are pooled into v ~ N(0, sd_facet^2) and the
+# object-by-facet terms into w ~ N(0, sd_int^2). One occasion is one
+# observation of nt binomial trials with its own draws of v and w;
+# replicating the occasion n times and averaging gives three curves:
 #
-#   link-scale     sd_obj^2 / (sd_obj^2 + (sd_facet^2 + pi^2/3) / n)
-#   response-scale Var(pi_obj) / (Var(pi_obj) + E[pi_obj (1 - pi_obj)] / n)
-#   information    1 - exp(-2 I(u ; mean of n Bernoulli draws))
+#   link-scale     Spearman-Brown of icc_eta = sd_obj^2 / (sd_obj^2 + sd_facet^2 + sd_int^2 + resid_var)
+#   response-scale Spearman-Brown of the absolute per-occasion ICC_Y of
+#                  .binomial_icc_core() (Theorem 3 of the DGT paper: the
+#                  Spearman-Brown D-study holds on the response scale for
+#                  every family when occasions are exchangeable)
+#   information    1 - exp(-2 I(u ; mean of n occasions)), computed from the
+#                  n-fold convolution of the per-occasion conditional pmf
 #
-# where pi_obj = E[plogis(alpha + u + v) | u] is the object's marginal
-# success probability. The link-scale curve is the classical G-theory
-# coefficient with the logistic residual variance convention. The
-# response-scale curve is the reliability of the observed proportion,
-# which is what a practitioner sees. The information curve is the
-# mutual-information ICC of the DGT paper (Theorems 4-5).
+# n counts occasions, not trials. Versions 0.3.0 to 0.5.1 computed the
+# response-scale curve as Var(pi_obj) / (Var(pi_obj) + E[pi_obj(1 - pi_obj)]/n),
+# which is the same Spearman-Brown curve at one trial per occasion; the
+# trials never entered, so for a binomial fit n counted single trials.
 
 
-#' Bernoulli D-study draws from variance-component vectors
+#' Bernoulli / binomial D-study draws from variance-component vectors
 #'
-#' Pure computation: takes posterior draws of the intercept, object SD,
-#' and pooled facet SD, and returns D-study matrices (draws x n_grid).
+#' Pure computation: takes posterior draws of the intercept and the
+#' random-effect SDs and returns D-study matrices (draws x n_grid).
 #' Does not require brms, so it can be tested directly.
 #'
 #' @param alpha Numeric vector. Posterior draws of the fixed intercept
-#'   on the logit scale.
+#'   on the link scale.
 #' @param sd_obj Numeric vector. Posterior draws of the object SD.
 #' @param sd_facet Numeric vector. Posterior draws of the pooled facet SD
 #'   (zero if the model has no facet random effects).
-#' @param n_grid Integer vector. Numbers of replicate measurements.
-#' @param K Integer. Outer Monte Carlo draws (objects) per posterior draw.
-#' @param K_facet Integer. Inner draws (facet effects) per object.
+#' @param n_grid Integer vector. Numbers of occasions.
+#' @param K Integer. Outer Monte Carlo draws (objects) per posterior draw
+#'   for the information curve.
+#' @param K_facet Integer. Inner draws (facet effects) per object for the
+#'   information curve.
 #' @param info Logical. Also compute the information ICC curve? This is
 #'   the expensive part; default \code{FALSE}.
 #' @param seed Integer or NULL. Random seed.
@@ -40,6 +45,11 @@
 #'   default \code{stats::plogis}.
 #' @param resid_var Numeric. Link-scale residual variance for the
 #'   link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).
+#' @param nt Numeric. Trials per occasion (the harmonic mean when they
+#'   vary; rounded for the information curve). Default 1.
+#' @param sd_int Numeric vector. Posterior draws of the pooled
+#'   object-by-facet SD. Default zero.
+#' @param n_nodes Integer. Quadrature nodes per dimension. Default 40.
 #' @return A list of matrices \code{link}, \code{response}, and (if
 #'   \code{info = TRUE}) \code{info}, each of dimension
 #'   \code{length(alpha) x length(n_grid)}.
@@ -48,66 +58,62 @@
                                     K = 500, K_facet = 500,
                                     info = FALSE, seed = NULL,
                                     invlink = stats::plogis,
-                                    resid_var = pi^2 / 3) {
+                                    resid_var = pi^2 / 3,
+                                    nt = 1, sd_int = 0, n_nodes = 40) {
   if (!is.null(seed)) set.seed(seed)
 
   S  <- length(alpha)
   nG <- length(n_grid)
-  stopifnot(length(sd_obj) == S, length(sd_facet) == S)
+  if (length(sd_int) == 1L) sd_int <- rep(sd_int, S)
+  stopifnot(length(sd_obj) == S, length(sd_facet) == S, length(sd_int) == S)
   stopifnot(all(n_grid >= 1), all(n_grid == floor(n_grid)))
 
-  logit_resid_var <- resid_var
+  sb <- function(icc, n) n * icc / (1 + (n - 1) * icc)
 
   link_mat <- matrix(NA_real_, S, nG)
   resp_mat <- matrix(NA_real_, S, nG)
   info_mat <- if (info) matrix(NA_real_, S, nG) else NULL
-
-  H_bern <- function(p) {
-    p <- pmin(pmax(p, 1e-12), 1 - 1e-12)
-    -p * log(p) - (1 - p) * log(1 - p)
-  }
+  nt_int <- max(1L, as.integer(round(nt)))
 
   for (s in seq_len(S)) {
     a  <- alpha[s]
     so <- sd_obj[s]
     sf <- sd_facet[s]
+    si <- sd_int[s]
 
-    # --- link-scale curve: closed form -----------------------------
-    link_mat[s, ] <- so^2 / (so^2 + (sf^2 + logit_resid_var) / n_grid)
+    # --- link-scale curve: Spearman-Brown of the absolute link-scale ICC
+    icc_eta <- so^2 / (so^2 + sf^2 + si^2 + resid_var)
+    link_mat[s, ] <- sb(icc_eta, n_grid)
 
-    # --- object marginal probabilities pi_obj -----------------------
-    # pi_obj(u) = E_v[ plogis(a + u + v) ], estimated by inner MC.
-    u <- stats::rnorm(K, 0, so)
-    if (sf > 0) {
-      v      <- matrix(stats::rnorm(K * K_facet, 0, sf), K, K_facet)
-      p_cond <- rowMeans(invlink(a + u + v))
-    } else {
-      p_cond <- invlink(a + u)
-    }
+    # --- response-scale curve: Spearman-Brown of the absolute per-occasion ICC
+    cc <- .binomial_icc_core(a, so, sf, nt, n_nodes = n_nodes,
+                             invlink = invlink, sd_int = si)
+    resp_mat[s, ] <- sb(cc[["icc_abs"]], n_grid)
 
-    var_pi    <- stats::var(p_cond)
-    E_pi_1mpi <- mean(p_cond * (1 - p_cond))
-
-    # --- response-scale curve: reliability of the mean of n trials --
-    # Conditional variance of the mean of n Bernoulli(pi_obj) draws is
-    # pi_obj(1 - pi_obj)/n, so the ICC of the observed proportion is
-    # Var(pi_obj) / (Var(pi_obj) + E[pi_obj(1 - pi_obj)]/n).
-    resp_mat[s, ] <- var_pi / (var_pi + E_pi_1mpi / n_grid)
-
-    # --- information curve: I(u ; mean of n draws) --------------------
+    # --- information curve: I(u ; mean of n occasions) -------------------
     if (info) {
+      sp <- sqrt(sf^2 + si^2)
+      u  <- stats::rnorm(K, 0, so)
+      v  <- matrix(stats::rnorm(K * K_facet, 0, sp), K, K_facet)
+      p  <- invlink(a + u + v)                                  # K x K_facet
+      # per-occasion conditional pmf of Y given u, facets integrated by MC
+      pmf1 <- sapply(0:nt_int, function(k) rowMeans(stats::dbinom(k, nt_int, p)))  # K x (nt+1)
+      pmf1 <- matrix(pmf1, K, nt_int + 1)
       for (g in seq_len(nG)) {
         n <- n_grid[g]
-        # Ybar takes values 0, 1/n, ..., 1. Given u, Ybar*n ~ Binomial(n, pi_obj).
-        # H(Ybar | u) averaged over objects, minus H(Ybar) marginally.
-        supp <- 0:n
-        # conditional pmf for each object: K x (n+1)
-        pmf_cond <- outer(p_cond, supp, function(p, k) stats::dbinom(k, n, p))
-        H_cond   <- mean(-rowSums(pmf_cond * log(pmf_cond + 1e-300)))
-        pmf_marg <- colMeans(pmf_cond)
+        # n-fold convolution of the per-occasion pmf for every object at
+        # once: FFT along the support, n-th power, inverse FFT. Support of
+        # the sum of n occasions is 0:(n nt).
+        L <- n * nt_int + 1
+        P <- matrix(0, L, K); P[seq_len(nt_int + 1), ] <- t(pmf1)
+        Fp <- stats::mvfft(P)
+        pmf_n <- t(Re(stats::mvfft(Fp^n, inverse = TRUE)) / L)   # K x L
+        pmf_n <- pmax(pmf_n, 0)
+        pmf_n <- pmf_n / rowSums(pmf_n)
+        H_cond   <- mean(-rowSums(pmf_n * log(pmf_n + 1e-300)))
+        pmf_marg <- colMeans(pmf_n)
         H_marg   <- -sum(pmf_marg * log(pmf_marg + 1e-300))
-        I_val    <- max(H_marg - H_cond, 0)
-        info_mat[s, g] <- 1 - exp(-2 * I_val)
+        info_mat[s, g] <- 1 - exp(-2 * max(H_marg - H_cond, 0))
       }
     }
   }
@@ -120,44 +126,30 @@
 
 #' Extract Bernoulli/binomial variance components from a brms fit
 #'
-#' Returns posterior draws of the intercept, the object SD, and the pooled
-#' SD of all other random intercepts. Mirrors the extraction used by
-#' \code{.icc_bernoulli_info_draws()} so the two are consistent.
+#' Returns posterior draws of the intercept and the classified
+#' random-effect SDs of \code{\link{.classify_re}}: the object SD, the
+#' pooled facet SD, the pooled object-by-facet SD, and the SD of the two
+#' pooled together.
 #'
 #' @param fit A brms fit with bernoulli or binomial family.
 #' @param person_group Character. Grouping factor that is the object of
 #'   measurement. If NULL, the first random effect is used.
 #' @return List with numeric vectors \code{alpha}, \code{sd_obj},
-#'   \code{sd_facet}, and character \code{person_group}.
+#'   \code{sd_facet}, \code{sd_int}, \code{sd_pooled}, character
+#'   \code{person_group}, and the classification \code{facet_terms},
+#'   \code{int_terms}.
 #' @keywords internal
 .extract_varcomps_bernoulli <- function(fit, person_group = NULL) {
   post <- posterior::as_draws_df(fit)
-
-  re_names <- names(brms::ranef(fit))
-  if (is.null(person_group)) {
-    person_group <- re_names[1]
-    message("Using '", person_group, "' as the object grouping factor.")
-  }
-  other_re <- setdiff(re_names, person_group)
-
-  sd_obj_col <- paste0("sd_", person_group, "__Intercept")
-  if (!sd_obj_col %in% names(post)) {
-    stop("Cannot find object SD column '", sd_obj_col, "' in posterior draws.")
-  }
-  sd_obj <- as.numeric(post[[sd_obj_col]])
-
-  sd_facet <- rep(0, nrow(post))
-  for (re in other_re) {
-    col <- paste0("sd_", re, "__Intercept")
-    if (col %in% names(post)) {
-      sd_facet <- sqrt(sd_facet^2 + as.numeric(post[[col]])^2)
-    }
-  }
-
+  re <- .classify_re(fit, person_group)
   list(
     alpha        = as.numeric(post[["b_Intercept"]]),
-    sd_obj       = sd_obj,
-    sd_facet     = sd_facet,
-    person_group = person_group
+    sd_obj       = re$sd_obj,
+    sd_facet     = re$sd_facet,
+    sd_int       = re$sd_int,
+    sd_pooled    = re$sd_pooled,
+    person_group = re$person_group,
+    facet_terms  = re$facet_terms,
+    int_terms    = re$int_terms
   )
 }

@@ -10,8 +10,16 @@
 #'
 #' @param fit A brms model fit object.
 #' @param n_grid Integer vector. Numbers of occasions to evaluate.
-#'   Default \code{1:50}.
+#'   Default \code{1:50}. For Bernoulli and binomial fits an occasion is
+#'   one observation of the fitted data (all of its trials, with new
+#'   draws of every facet and object-by-facet effect), and the curves
+#'   are Spearman-Brown on the per-occasion coefficients of
+#'   \code{\link{dgt_icc}} (Theorem 3 of the DGT paper); n never counts
+#'   single trials.
 #' @param person_group Character. Name of the person grouping factor.
+#' @param n_trials Numeric. Bernoulli/binomial only: trials per
+#'   occasion. Detected from the fit when NULL (the harmonic mean when
+#'   the trials vary); see \code{\link{dgt_icc}}.
 #' @param K Integer. Simulated persons per draw (hurdle and Bernoulli).
 #'   Default 5000. For Bernoulli families this is the outer Monte Carlo
 #'   size; a few hundred is usually enough.
@@ -43,7 +51,8 @@
 dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
                        K = 5000, K_facet = 500, info = FALSE,
                        probs = c(0.025, 0.975), seed = NULL,
-                       thin = 1L, exposure_var = NULL, ref_exposure = NULL) {
+                       thin = 1L, exposure_var = NULL, ref_exposure = NULL,
+                       n_trials = NULL) {
 
   family <- .detect_family(fit)
 
@@ -105,10 +114,35 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
 
     vc <- .extract_varcomps_bernoulli(fit, person_group)
     link <- .binary_link(fit)
+    if (is.null(n_trials)) {
+      trials <- .detect_n_trials(fit)
+      if (is.null(trials)) {
+        if (family == "binomial") {
+          warning("Could not determine the number of binomial trials from the ",
+                  "model; assuming one trial per occasion. Pass n_trials ",
+                  "explicitly if the response is a count out of several trials.",
+                  call. = FALSE)
+        }
+        n_trials <- 1
+      } else {
+        n_trials <- trials$n
+        if (!trials$constant) {
+          message(sprintf("Trials vary across observations; an occasion carries their harmonic mean, n_h = %.2f.", n_trials))
+        }
+      }
+    }
+    if (length(vc$int_terms) > 0) {
+      message("Object-by-facet term(s) ", paste(vc$int_terms, collapse = ", "),
+              " are redrawn with every occasion, as are the facet term(s).")
+    }
+    # The information curve is the expensive one and needs few objects;
+    # K = 5000 is the hurdle Monte Carlo size.
+    K_info <- min(as.integer(K), 500L)
     ds_draws <- .dstudy_bernoulli_draws(
       alpha = vc$alpha, sd_obj = vc$sd_obj, sd_facet = vc$sd_facet,
-      n_grid = n_grid, K = K, K_facet = K_facet, info = info, seed = seed,
-      invlink = .inv_link_fun(link), resid_var = .link_resid_var(link)
+      n_grid = n_grid, K = K_info, K_facet = K_facet, info = info, seed = seed,
+      invlink = .inv_link_fun(link), resid_var = .link_resid_var(link),
+      nt = n_trials, sd_int = vc$sd_int
     )
 
     curves <- rbind(
@@ -134,6 +168,7 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
     required_n = req_n,
     n_grid     = n_grid
   )
+  if (family %in% c("bernoulli", "binomial")) result$n_trials <- n_trials
   class(result) <- "dgt_dstudy"
   result
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/dstudy-bernoulli.R
 \name{.dstudy_bernoulli_draws}
 \alias{.dstudy_bernoulli_draws}
-\title{Bernoulli D-study draws from variance-component vectors}
+\title{Bernoulli / binomial D-study draws from variance-component vectors}
 \usage{
 .dstudy_bernoulli_draws(
   alpha,
@@ -14,23 +14,28 @@
   info = FALSE,
   seed = NULL,
   invlink = stats::plogis,
-  resid_var = pi^2/3
+  resid_var = pi^2/3,
+  nt = 1,
+  sd_int = 0,
+  n_nodes = 40
 )
 }
 \arguments{
 \item{alpha}{Numeric vector. Posterior draws of the fixed intercept
-on the logit scale.}
+on the link scale.}
 
 \item{sd_obj}{Numeric vector. Posterior draws of the object SD.}
 
 \item{sd_facet}{Numeric vector. Posterior draws of the pooled facet SD
 (zero if the model has no facet random effects).}
 
-\item{n_grid}{Integer vector. Numbers of replicate measurements.}
+\item{n_grid}{Integer vector. Numbers of occasions.}
 
-\item{K}{Integer. Outer Monte Carlo draws (objects) per posterior draw.}
+\item{K}{Integer. Outer Monte Carlo draws (objects) per posterior draw
+for the information curve.}
 
-\item{K_facet}{Integer. Inner draws (facet effects) per object.}
+\item{K_facet}{Integer. Inner draws (facet effects) per object for the
+information curve.}
 
 \item{info}{Logical. Also compute the information ICC curve? This is
 the expensive part; default \code{FALSE}.}
@@ -42,6 +47,14 @@ default \code{stats::plogis}.}
 
 \item{resid_var}{Numeric. Link-scale residual variance for the
 link-scale curve (pi^2/3 logit, 1 probit, pi^2/6 cloglog).}
+
+\item{nt}{Numeric. Trials per occasion (the harmonic mean when they
+vary; rounded for the information curve). Default 1.}
+
+\item{sd_int}{Numeric vector. Posterior draws of the pooled
+object-by-facet SD. Default zero.}
+
+\item{n_nodes}{Integer. Quadrature nodes per dimension. Default 40.}
 }
 \value{
 A list of matrices \code{link}, \code{response}, and (if
@@ -49,8 +62,8 @@ A list of matrices \code{link}, \code{response}, and (if
 \code{length(alpha) x length(n_grid)}.
 }
 \description{
-Pure computation: takes posterior draws of the intercept, object SD,
-and pooled facet SD, and returns D-study matrices (draws x n_grid).
+Pure computation: takes posterior draws of the intercept and the
+random-effect SDs and returns D-study matrices (draws x n_grid).
 Does not require brms, so it can be tested directly.
 }
 \keyword{internal}

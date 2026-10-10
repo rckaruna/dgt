@@ -2,7 +2,7 @@
 % Please edit documentation in R/icc-binomial.R
 \name{.binomial_icc_core}
 \alias{.binomial_icc_core}
-\title{Response-scale ICC core for a Bernoulli / binomial GLMM with a facet}
+\title{Response-scale ICC core for a Bernoulli / binomial GLMM with facets}
 \usage{
 .binomial_icc_core(
   alpha,
@@ -10,7 +10,8 @@
   sd_facet = 0,
   nt = 1,
   n_nodes = 40,
-  invlink = stats::plogis
+  invlink = stats::plogis,
+  sd_int = 0
 )
 }
 \arguments{
@@ -20,32 +21,46 @@
 
 \item{sd_facet}{Numeric. Pooled facet SD. Default 0.}
 
-\item{nt}{Integer. Binomial trials per observation. Default 1.}
+\item{nt}{Numeric. Binomial trials per observation (the harmonic mean
+when they vary). Default 1.}
 
 \item{n_nodes}{Integer. Quadrature nodes per dimension. Default 40.}
 
 \item{invlink}{Function. Inverse link. Default \code{stats::plogis}.}
+
+\item{sd_int}{Numeric. Pooled object-by-facet SD. Default 0.}
 }
 \value{
 Named numeric vector: var_obj, var_facet, var_int, e_binom,
 mean_pi, icc_rel, icc_abs.
 }
 \description{
-Gauss-Hermite quadrature over the object effect u ~ N(0, sd_obj^2)
-and the pooled facet effect v ~ N(0, sd_facet^2), with
-g(pi) = alpha + u + v and Y | pi ~ Binomial(nt, pi). The object's
-universe score on the response scale is the facet-averaged probability E_v(pi given u).
+Gauss-Hermite quadrature over the object effect u ~ N(0, sd_obj^2),
+the pooled facet effect v ~ N(0, sd_facet^2), and the pooled
+object-by-facet effect w ~ N(0, sd_int^2), with
+g(pi) = alpha + u + v + w and Y given pi ~ Binomial(nt, pi). The
+object's universe score on the response scale is the expectation of
+pi over v and w given u.
 }
 \details{
 \deqn{ICC_abs = var_obj / (var_obj + var_facet + var_int + E[pi(1-pi)]/nt)}
 \deqn{ICC_rel = var_obj / (var_obj + var_int + E[pi(1-pi)]/nt)}
 
+where var_facet is the variance over v of the expectation of pi over
+u and w given v, and var_int is the remainder of the total variance
+of pi, which holds the object-by-facet variance together with the
+interaction the nonlinear link creates. With
+sd_int = 0 the third dimension collapses and the function returns the
+0.5.1 values; with sd_int > 0, var_obj, the total variance, and hence
+ICC_abs equal what pooling w into v would give, and only ICC_rel
+changes.
+
 With nt = 1 the denominator of ICC_abs is P(1 - P), so ICC_abs equals
 the population intraclass kappa (Fleiss) and the phi coefficient under
 compound symmetry. For the probit link the exact value is
 (Phi_2(z, z; rho) - P^2) / (P(1 - P)) with
-z = alpha / sqrt(1 + sd_obj^2 + sd_facet^2) and
-rho = sd_obj^2 / (1 + sd_obj^2 + sd_facet^2); the tests check the
+z = alpha / sqrt(1 + s^2) and rho = sd_obj^2 / (1 + s^2), where
+s^2 = sd_obj^2 + sd_facet^2 + sd_int^2; the tests check the
 quadrature against this closed form.
 }
 \keyword{internal}
