@@ -86,7 +86,7 @@ test_that("binomial trials scale the per-task information", {
   o4 <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, 10, n_trials = 4)
   o40 <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, 40, n_trials = 1)
   expect_true(all(o4$link > o1$link))
-  expect_equal(o4$link, o40$link, tolerance = 1e-12)  # 10 tasks x 4 trials = 40 x 1 on the link scale
+  expect_equal(as.vector(o4$link), as.vector(o40$link), tolerance = 1e-12)  # 10 tasks x 4 trials = 40 x 1 on the link scale
 })
 
 test_that("dgt_dstudy_slopes() runs on a small brms random-slope fit", {

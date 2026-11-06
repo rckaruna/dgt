@@ -74,8 +74,8 @@
   Ibar_sum <- matrix(0, k, k)
 
   for (d in seq_len(D)) {
-    b   <- beta[d, ]
-    sg  <- sd[d, ]
+    b   <- as.vector(beta[d, ])
+    sg  <- as.vector(sd[d, ])
     p   <- invlink(as.vector(X %*% b))
     wt  <- n_trials * p * (1 - p)
     Ibar <- crossprod(S * sqrt(wt)) / nrow(S)
@@ -226,9 +226,8 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
 
   if (!is.null(seed)) set.seed(seed)
   idx <- if (draws >= nrow(post)) seq_len(nrow(post)) else sort(sample.int(nrow(post), draws))
-  beta <- post[idx, bn, drop = FALSE]
-  sd   <- post[idx, sd_cols, drop = FALSE]
-  colnames(sd) <- slopes
+  beta <- matrix(as.numeric(post[idx, bn]), ncol = length(bn), dimnames = list(NULL, bn))
+  sd   <- matrix(as.numeric(post[idx, sd_cols]), ncol = length(sd_cols), dimnames = list(NULL, slopes))
 
   nt <- 1
   if (family == "binomial") { tr <- .detect_n_trials(fit); if (!is.null(tr)) nt <- tr$n }
