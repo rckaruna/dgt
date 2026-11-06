@@ -10,3 +10,4 @@
 ^doc$
 ^Meta$
 ^verify_dstudy\.py$
+^verify_slopes\.py$

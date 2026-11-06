@@ -1,3 +1,26 @@
+# dgt 0.7.0
+
+* New: `dgt_dstudy_slopes()`, a D-study whose object of measurement is a
+  vector of respondent-specific regression coefficients (uncorrelated
+  random slopes, `(0 + s1 + ... + sk || group)`) rather than a random
+  intercept. Built for paired discrete choice experiments, where the
+  quantity a value set rests on is each respondent's weight on each
+  attribute. Tasks are drawn from a `design` of distinct task rows; after
+  `m` tasks the posterior variance of the coefficients is
+  `V(m) = (m * Ibar + Sigma^-1)^-1`, with `Ibar` the mean per-task Fisher
+  information over the design at the population coefficients. The
+  link-scale coefficient is `1 - V_kk(m)/sigma_k^2`. The response-scale
+  coefficient is `Var(E[pi | data]) / Var(pi)` for the respondent's
+  probability on a probe task that isolates slope `k` (chosen from the
+  design, or supplied through `probe`), computed by Gauss-Hermite
+  quadrature; it is zero at `m = 0`, one in the limit, and for the logit
+  link lies below the link-scale curve. Returns curves with credible
+  bands, `required_n` for 0.70 / 0.80 / 0.90 on both scales, the probes
+  used, and `Ibar`; `print()` and `plot()` (one panel per slope). Binomial
+  trials scale the per-task information. The pure routine
+  `.dstudy_slopes_draws()` is verified against an independent numpy port
+  (`verify_slopes.py`).
+
 # dgt 0.6.1
 
 * Link-scale coefficient for binomial fits. `dgt_icc()`'s `icc_eta` and
