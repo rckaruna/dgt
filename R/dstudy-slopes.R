@@ -1,4 +1,4 @@
-# dstudy-slopes.R -- D-study for random slopes (v0.7.0)
+# dstudy-slopes.R -- D-study for random slopes (v0.7.0; averaged method v0.7.1)
 #
 # The object of measurement is a vector of respondent-specific regression
 # coefficients rather than a random intercept: in a paired discrete choice
@@ -8,22 +8,37 @@
 #     eta_nc = x_c' beta + s_c' theta_n,     theta_n ~ N(0, Sigma),
 #
 # with Sigma = diag(sigma_k^2) (uncorrelated slopes, `(0 + s1 + s2 || g)`).
-# Tasks are drawn at random from the R rows of a design. After m tasks the
-# posterior precision of theta_n is approximately m * Ibar + Sigma^{-1},
-# where Ibar = mean_c p_c (1 - p_c) s_c s_c' is the expected per-task Fisher
-# information at the population coefficients, so
+# Tasks are drawn at random, without replacement, from the R rows of a design
+# (a fresh permutation starts when the rows run out). For a respondent with
+# coefficients theta who has answered the tasks in a set T, the posterior
+# variance is approximately
 #
-#     V(m) = (m * Ibar + Sigma^{-1})^{-1}.
+#     V(theta, T) = ( sum_{c in T} p_c (1 - p_c) s_c s_c' + Sigma^{-1} )^{-1},
 #
-# Link scale.  rho_k(m) = 1 - V_kk(m) / sigma_k^2
-#              = Var(E[theta_k | data]) / Var(theta_k) under joint normality.
-# Response scale.  A probe task isolating slope k gives the respondent's
-#              probability pi_n = g(a_k + c_k theta_nk) (g the inverse link).
-#              With theta_hat ~ N(0, sigma_k^2 - V_kk) the posterior mean,
-#              rho_k^Y(m) = Var( E[pi | theta_hat] ) / Var(pi),
-#              both terms by Gauss-Hermite quadrature. It is 0 at m = 0 and
-#              1 as m -> infinity, and for the logit link lies below the
-#              link-scale curve, as in Theorem 1 of the DGT paper.
+# with p_c evaluated at that respondent's theta (for the logit link the
+# observed and expected information coincide).
+#
+# method = "simulate" (default, v0.7.1). Average over respondents and task
+#   draws by Monte Carlo:
+#     link      rho_k(m)   = 1 - E[ V_kk(theta, T_m) ] / sigma_k^2
+#     response  rho_k^Y(m) = 1 - E[ Var(pi_k | data) ] / Var(pi_k),
+#   where pi_k = g(a_k + c_k theta_k) is the respondent's probability on a
+#   probe task isolating slope k, and Var(pi_k | data) is taken under
+#   N( sqrt(rho_k(m)) theta_k, V_kk ): the centre has the variance of a
+#   posterior mean, sigma_k^2 - E[V_kk], so the coefficient is exactly 0 with
+#   no data. Against respondents simulated from the model and estimated by
+#   their posterior means, the link curve is within about 0.01 and the
+#   response curve within about 0.02 (on the low side) of the squared
+#   correlation between true and estimated values (verify_slopes.py).
+#
+# method = "plugin" (v0.7.0). Replace the average by the information at the
+#   population coefficients and the average task: V(m) = (m Ibar + Sigma^-1)^-1,
+#   Ibar = mean_c p_c(1 - p_c) s_c s_c' at theta = 0. Closed form and fast,
+#   but optimistic when the slopes are heterogeneous: respondents far from
+#   the population mean make more lopsided choices, which carry less
+#   information, and a particular draw of tasks is less balanced than the
+#   average. With slope SDs comparable to the mean effects the plug-in
+#   curve was 0.06 to 0.09 too high at 20 tasks in a paired DCE.
 #
 # The pure computation lives in .dstudy_slopes_draws() and is tested
 # without brms; dgt_dstudy_slopes() reads a brmsfit.
@@ -54,12 +69,22 @@
 #' @param n_trials Numeric. Trials per task (binomial); the per-task
 #'   information is multiplied by it. Default 1.
 #' @param n_nodes Integer. Gauss-Hermite nodes. Default 40.
+#' @param method Character. \code{"simulate"} (default) averages the
+#'   posterior variance over simulated respondents and task draws;
+#'   \code{"plugin"} uses the information at the population coefficients
+#'   and the average task (closed form, optimistic under heterogeneity).
+#' @param K Integer. Simulated respondents per posterior draw
+#'   (\code{method = "simulate"}). Default 200.
+#' @param seed Integer or NULL. Seed for the simulation.
 #' @return A list of two arrays \code{link} and \code{response}, each
 #'   draws x length(n_grid) x k, plus \code{Ibar} (the posterior-mean
-#'   per-task information matrix).
+#'   per-task information matrix at the population coefficients).
 #' @keywords internal
 .dstudy_slopes_draws <- function(beta, sd, X, S, Xp, Sp, n_grid,
-                                 invlink = stats::plogis, n_trials = 1, n_nodes = 40) {
+                                 invlink = stats::plogis, n_trials = 1, n_nodes = 40,
+                                 method = c("simulate", "plugin"), K = 200, seed = NULL) {
+  method <- match.arg(method)
+  if (!is.null(seed)) set.seed(seed)
   beta <- as.matrix(beta); sd <- as.matrix(sd)
   X <- as.matrix(X); S <- as.matrix(S); Xp <- as.matrix(Xp); Sp <- as.matrix(Sp)
   D <- nrow(beta); k <- ncol(sd); nG <- length(n_grid)
@@ -91,20 +116,56 @@
       var_pi[j] <- sum(w * g^2) - sum(w * g)^2
     }
 
-    for (i in seq_len(nG)) {
-      m <- n_grid[i]
-      V <- if (m == 0) diag(sg^2, k) else solve(m * Ibar + Sinv)
-      v <- pmin(pmax(diag(V), 0), sg^2)
-      link_arr[d, i, ] <- 1 - v / sg^2
-      for (j in seq_len(k)) {
-        if (var_pi[j] <= 0) { resp_arr[d, i, j] <- NA_real_; next }
-        tau <- sqrt(sg[j]^2 - v[j])    # sd of the posterior mean
-        if (tau <= 0) { resp_arr[d, i, j] <- 0; next }
-        # E[pi | theta_hat] on the outer nodes, inner integral over N(theta_hat, v)
-        th <- tau * z
-        Epi <- vapply(th, function(t) sum(w * invlink(a[j] + cc[j] * (t + sqrt(v[j]) * z))), numeric(1))
-        var_Epi <- sum(w * Epi^2) - sum(w * Epi)^2
-        resp_arr[d, i, j] <- min(max(var_Epi / var_pi[j], 0), 1)
+    if (method == "plugin") {
+      for (i in seq_len(nG)) {
+        m <- n_grid[i]
+        V <- if (m == 0) diag(sg^2, k) else solve(m * Ibar + Sinv)
+        v <- pmin(pmax(diag(V), 0), sg^2)
+        link_arr[d, i, ] <- 1 - v / sg^2
+        for (j in seq_len(k)) {
+          if (var_pi[j] <= 0) { resp_arr[d, i, j] <- NA_real_; next }
+          tau <- sqrt(sg[j]^2 - v[j])    # sd of the posterior mean
+          if (tau <= 0) { resp_arr[d, i, j] <- 0; next }
+          # E[pi | theta_hat] on the outer nodes, inner integral over N(theta_hat, v)
+          th <- tau * z
+          Epi <- vapply(th, function(t) sum(w * invlink(a[j] + cc[j] * (t + sqrt(v[j]) * z))), numeric(1))
+          var_Epi <- sum(w * Epi^2) - sum(w * Epi)^2
+          resp_arr[d, i, j] <- min(max(var_Epi / var_pi[j], 0), 1)
+        }
+      }
+    } else {
+      # simulate: K respondents, each with their own coefficients and their
+      # own random order of tasks; information accumulates along the order.
+      nR <- nrow(S); M <- max(n_grid)
+      fx <- as.vector(X %*% b)
+      theta <- matrix(stats::rnorm(K * k), K, k) %*% diag(sg, k)
+      v_arr <- array(0, c(K, nG, k))
+      at <- match(seq_len(M), n_grid)                 # grid index reached after t tasks
+      i0 <- which(n_grid == 0)
+      for (r in seq_len(K)) {
+        if (length(i0)) v_arr[r, i0, ] <- sg^2
+        if (M == 0) next
+        ord <- unlist(lapply(seq_len(ceiling(M / nR)), function(q) sample.int(nR)))[seq_len(M)]
+        Sr  <- S[ord, , drop = FALSE]
+        pr  <- invlink(fx[ord] + as.vector(Sr %*% theta[r, ]))
+        wr  <- n_trials * pr * (1 - pr)
+        info <- Sinv
+        for (t in seq_len(M)) {
+          info <- info + wr[t] * tcrossprod(Sr[t, ])
+          if (!is.na(at[t])) v_arr[r, at[t], ] <- pmin(diag(chol2inv(chol(info))), sg^2)
+        }
+      }
+      for (i in seq_len(nG)) {
+        vm <- matrix(v_arr[, i, ], K, k)
+        rho <- pmin(pmax(1 - colMeans(vm) / sg^2, 0), 1)
+        link_arr[d, i, ] <- rho
+        for (j in seq_len(k)) {
+          if (var_pi[j] <= 0) { resp_arr[d, i, j] <- NA_real_; next }
+          centre <- sqrt(rho[j]) * theta[, j]
+          g <- invlink(a[j] + cc[j] * (outer(centre, rep(1, n_nodes)) + outer(sqrt(vm[, j]), z)))
+          vpost <- as.vector(g^2 %*% w) - as.vector(g %*% w)^2
+          resp_arr[d, i, j] <- min(max(1 - mean(vpost) / var_pi[j], 0), 1)
+        }
       }
     }
   }
@@ -123,12 +184,17 @@
 #' task), with posterior credible bands, and the number of tasks needed
 #' for 0.70, 0.80, and 0.90.
 #'
-#' The link-scale coefficient is \eqn{1 - V_{kk}(m)/\sigma_k^2} with
-#' \eqn{V(m) = (m \bar I + \Sigma^{-1})^{-1}} and \eqn{\bar I} the mean
-#' per-task Fisher information over the design rows at the population
-#' coefficients. The response-scale coefficient is
-#' \eqn{Var(E[\pi \mid data]) / Var(\pi)} for the probe probability
-#' \eqn{\pi = g(a_k + c_k \theta_k)}, by Gauss-Hermite quadrature.
+#' For a respondent with coefficients \eqn{\theta} who has answered the
+#' tasks in \eqn{T}, the posterior variance is taken as
+#' \eqn{V(\theta, T) = (\sum_{c \in T} p_c(1 - p_c) s_c s_c' + \Sigma^{-1})^{-1}}.
+#' The link-scale coefficient is \eqn{1 - E[V_{kk}]/\sigma_k^2} and the
+#' response-scale coefficient is \eqn{1 - E[Var(\pi_k \mid data)]/Var(\pi_k)}
+#' for the probe probability \eqn{\pi_k = g(a_k + c_k \theta_k)}, the
+#' expectations being over respondents and task draws
+#' (\code{method = "simulate"}) or replaced by a single evaluation at the
+#' population coefficients and the average task (\code{method = "plugin"}).
+#' Tasks are drawn without replacement from the design rows, starting a
+#' fresh permutation when they run out.
 #'
 #' @param fit A brms fit, bernoulli or binomial family, with exactly one
 #'   grouping factor carrying uncorrelated random slopes and no random
@@ -147,7 +213,16 @@
 #'   reliability is measured. NULL (default) picks, for slope \code{k},
 #'   the design row that most isolates it: the row maximising
 #'   \eqn{|s_k| / \sum_j |s_j|}.
-#' @param draws Integer. Posterior draws used. Default 400.
+#' @param method Character. \code{"simulate"} (default) averages the
+#'   posterior variance of a respondent's coefficients over simulated
+#'   respondents and random task orders, so it accounts for respondents far
+#'   from the population mean and for the particular tasks drawn.
+#'   \code{"plugin"} evaluates the information once, at the population
+#'   coefficients and the average task; it is closed-form and fast but
+#'   overstates reliability when the slopes are heterogeneous.
+#' @param draws Integer. Posterior draws used. Default 200.
+#' @param K Integer. Simulated respondents per posterior draw
+#'   (\code{method = "simulate"}). Default 200.
 #' @param probs Numeric. Credible interval probabilities.
 #' @param seed Integer or NULL. Seed for the draw subsample.
 #' @param n_nodes Integer. Gauss-Hermite nodes. Default 40.
@@ -168,8 +243,10 @@
 #' }
 #' @export
 dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
-                              probe = NULL, draws = 400,
+                              probe = NULL, method = c("simulate", "plugin"),
+                              draws = 200, K = 200,
                               probs = c(0.025, 0.975), seed = NULL, n_nodes = 40) {
+  method <- match.arg(method)
   family <- .detect_family(fit)
   if (!family %in% c("bernoulli", "binomial"))
     stop("dgt_dstudy_slopes() supports the bernoulli / binomial families; got '",
@@ -232,7 +309,8 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
   nt <- 1
   if (family == "binomial") { tr <- .detect_n_trials(fit); if (!is.null(tr)) nt <- tr$n }
   arr <- .dstudy_slopes_draws(beta, sd, X, S, Xp, Sp, n_grid,
-                              invlink = invlink, n_trials = nt, n_nodes = n_nodes)
+                              invlink = invlink, n_trials = nt, n_nodes = n_nodes,
+                              method = method, K = K)
 
   curves <- do.call(rbind, lapply(seq_along(slopes), function(j) {
     rbind(
@@ -253,7 +331,7 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
   structure(list(family = family, link = link, slope_group = slope_group,
                  slopes = slopes, curves = curves, required_n = req,
                  probes = probe_df, Ibar = arr$Ibar, n_grid = n_grid,
-                 n_draws = length(idx)),
+                 n_draws = length(idx), method = method, K = K),
             class = "dgt_dstudy_slopes")
 }
 
@@ -272,7 +350,8 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
 print.dgt_dstudy_slopes <- function(x, ...) {
   cat("DGT random-slope D-study (", x$family, ", ", x$link, " link)\n", sep = "")
   cat("Slope group: ", x$slope_group, "; ", length(x$slopes), " slopes; ",
-      x$n_draws, " posterior draws\n\n", sep = "")
+      x$n_draws, " posterior draws; method: ", x$method,
+      if (identical(x$method, "simulate")) paste0(" (K = ", x$K, ")") else "", "\n\n", sep = "")
   cat("Tasks per respondent needed for reliability 0.70 / 0.80 / 0.90:\n")
   r <- x$required_n
   tab <- do.call(rbind, lapply(x$slopes, function(s) {

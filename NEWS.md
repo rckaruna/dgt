@@ -1,3 +1,29 @@
+# dgt 0.7.1
+
+* `dgt_dstudy_slopes()` gains `method`. The new default, `"simulate"`,
+  averages the posterior variance of a respondent's coefficients over
+  simulated respondents and random task orders (`K` respondents per
+  posterior draw; tasks drawn without replacement from the design). The
+  0.7.0 computation is kept as `method = "plugin"`: it evaluates the
+  information once, at the population coefficients and the average task,
+  and is optimistic when the slopes are heterogeneous, because
+  respondents far from the population mean make more lopsided choices and
+  a particular draw of tasks is less balanced than the average. In a
+  paired DCE with slope SDs comparable to the mean effects the plug-in
+  curve was 0.06 to 0.09 too high on the link scale at 20 tasks. Against
+  respondents simulated from the model and estimated by their posterior
+  means, `"simulate"` is within about 0.01 (link) and 0.02 (response) of
+  the squared correlation between true and estimated values
+  (`verify_slopes.py`, checks 5 and 6).
+* The response-scale coefficient under `"simulate"` is
+  `1 - E[Var(pi | data)] / Var(pi)` with the posterior for slope `k` centred
+  at `sqrt(rho_k) * theta_k`, which has the variance of a posterior mean, so
+  the coefficient is exactly zero with no data. Under this method the
+  response-scale curve is not systematically below the link-scale curve;
+  the ordering observed under `"plugin"` was a feature of that
+  approximation.
+* Defaults: `draws = 200` (was 400), `K = 200`. `print()` reports the method.
+
 # dgt 0.7.0
 
 * New: `dgt_dstudy_slopes()`, a D-study whose object of measurement is a
