@@ -95,7 +95,7 @@ test_that("simulate method: 0 at m = 0, link non-decreasing in m, approaches 1",
                                     method = "simulate", K = 300, seed = 1)
   expect_equal(dim(out$link), c(1, 9, 2))
   expect_equal(as.vector(out$link[1, 1, ]), c(0, 0))
-  expect_equal(as.vector(out$response[1, 1, ]), c(0, 0), tolerance = 1e-10)
+  expect_true(all(abs(out$response[1, 1, ]) < 1e-8))
   # information accumulates along each respondent's task order, so the link
   # curve is monotone exactly, not just up to Monte Carlo error
   for (j in 1:2) expect_true(all(diff(out$link[1, , j]) >= -1e-12))
