@@ -1,3 +1,36 @@
+# dgt 0.7.2
+
+Fixes to `dgt_dstudy_slopes()`. No other function changes.
+
+* Logit link only. The per-task information `p(1 - p)` is specific to the
+  logit link, but probit, cloglog, and cauchit fits were accepted and gave
+  wrong numbers. They now stop with an error.
+* A repeated value in `n_grid` returned reliability 1 for the repeats under
+  `method = "simulate"`. The grid is now sorted and repeated values are
+  dropped; the internal routine returns one column per element in the order
+  given.
+* With varying binomial trials the information used the harmonic mean of
+  the trials; it scales with the arithmetic mean, which is now used. If the
+  trials cannot be read from the fit, a warning says that one trial per task
+  is assumed.
+* When the fit has other grouping factors, their random effects are left out
+  of the linear predictor. This was silent and now gives a warning.
+* `seed` governs both the posterior-draw subsample and the simulation, as
+  before, and the caller's random number stream is now restored on exit
+  (`withr::local_seed()`; `withr` is a new import).
+* `print()` notes when `n_grid` goes beyond the number of design rows, where
+  tasks repeat rows. The object gains `n_design_rows` and `n_trials`.
+* Documentation. The `"simulate"` curves are conservative, not centred:
+  against respondents simulated from the model and estimated by their exact
+  posterior means, the link-scale curve was low by about 0.01 and the
+  response-scale curve by about 0.02 in the cases checked, and by more when
+  the slopes are very heterogeneous. The 0.7.1 entry called this "within
+  about 0.01 and 0.02". Help pages added for `dgt_dstudy_slopes()` and its
+  `plot()` method.
+* Tests: a ground-truth test (exact posterior variance by quadrature),
+  repeated and unsorted grids, tasks beyond the design rows, and seed
+  isolation.
+
 # dgt 0.7.1
 
 * `dgt_dstudy_slopes()` gains `method`. The new default, `"simulate"`,

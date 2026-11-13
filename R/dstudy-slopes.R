@@ -1,4 +1,5 @@
-# dstudy-slopes.R -- D-study for random slopes (v0.7.0; averaged method v0.7.1)
+# dstudy-slopes.R -- D-study for random slopes (v0.7.0; averaged method v0.7.1;
+# fixes v0.7.2)
 #
 # The object of measurement is a vector of respondent-specific regression
 # coefficients rather than a random intercept: in a paired discrete choice
@@ -26,10 +27,13 @@
 #   probe task isolating slope k, and Var(pi_k | data) is taken under
 #   N( sqrt(rho_k(m)) theta_k, V_kk ): the centre has the variance of a
 #   posterior mean, sigma_k^2 - E[V_kk], so the coefficient is exactly 0 with
-#   no data. Against respondents simulated from the model and estimated by
-#   their posterior means, the link curve is within about 0.01 and the
-#   response curve within about 0.02 (on the low side) of the squared
-#   correlation between true and estimated values (verify_slopes.py).
+#   no data. The curves are conservative, not centred: against respondents
+#   simulated from the model and estimated by their exact posterior means,
+#   the link curve is low by about 0.01 and the response curve by about
+#   0.02, and by more when the slopes are very heterogeneous
+#   (verify_slopes.py; the ground-truth test in test-dstudy-slopes.R).
+#   The information weight p(1 - p) is that of the logit link, so the
+#   wrapper accepts logit fits only.
 #
 # method = "plugin" (v0.7.0). Replace the average by the information at the
 #   population coefficients and the average task: V(m) = (m Ibar + Sigma^-1)^-1,
@@ -64,8 +68,12 @@
 #'   the diagonal \code{Sp[k, k]} enters, the probe's other slope terms
 #'   being set to zero so that the response-scale object is the k-th
 #'   coefficient alone.
-#' @param n_grid Integer vector. Numbers of tasks per respondent.
+#' @param n_grid Integer vector. Numbers of tasks per respondent. Values
+#'   may repeat or be out of order; the result has one column per element,
+#'   in the order given.
 #' @param invlink Function. Inverse link; default \code{stats::plogis}.
+#'   The per-task information is taken as \code{p (1 - p)}, which is
+#'   correct for the logit link only.
 #' @param n_trials Numeric. Trials per task (binomial); the per-task
 #'   information is multiplied by it. Default 1.
 #' @param n_nodes Integer. Gauss-Hermite nodes. Default 40.
@@ -75,7 +83,8 @@
 #'   and the average task (closed form, optimistic under heterogeneity).
 #' @param K Integer. Simulated respondents per posterior draw
 #'   (\code{method = "simulate"}). Default 200.
-#' @param seed Integer or NULL. Seed for the simulation.
+#' @param seed Integer or NULL. Seed for the simulation. The caller's
+#'   random number stream is restored on exit.
 #' @return A list of two arrays \code{link} and \code{response}, each
 #'   draws x length(n_grid) x k, plus \code{Ibar} (the posterior-mean
 #'   per-task information matrix at the population coefficients).
@@ -84,13 +93,19 @@
                                  invlink = stats::plogis, n_trials = 1, n_nodes = 40,
                                  method = c("simulate", "plugin"), K = 200, seed = NULL) {
   method <- match.arg(method)
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) withr::local_seed(seed)   # restored when this function exits
   beta <- as.matrix(beta); sd <- as.matrix(sd)
   X <- as.matrix(X); S <- as.matrix(S); Xp <- as.matrix(Xp); Sp <- as.matrix(Sp)
-  D <- nrow(beta); k <- ncol(sd); nG <- length(n_grid)
+  D <- nrow(beta); k <- ncol(sd)
   stopifnot(nrow(sd) == D, ncol(X) == ncol(beta), nrow(S) == nrow(X), ncol(S) == k,
             nrow(Xp) == k, ncol(Xp) == ncol(beta), nrow(Sp) == k, ncol(Sp) == k,
-            all(n_grid >= 0), all(n_grid == floor(n_grid)))
+            length(n_grid) >= 1, all(n_grid >= 0), all(n_grid == floor(n_grid)))
+  # compute on the distinct grid values in increasing order; the columns are
+  # put back in the order given at the end (a repeated value used to be left
+  # at variance 0, that is, reliability 1)
+  grid_in <- n_grid
+  n_grid  <- sort(unique(grid_in))
+  nG      <- length(n_grid)
 
   gh <- .gh_nodes(n_nodes)
   z  <- gh$x; w <- gh$w
@@ -169,7 +184,10 @@
       }
     }
   }
-  dimnames(link_arr) <- dimnames(resp_arr) <- list(NULL, n_grid, colnames(S))
+  pos <- match(grid_in, n_grid)
+  link_arr <- link_arr[, pos, , drop = FALSE]
+  resp_arr <- resp_arr[, pos, , drop = FALSE]
+  dimnames(link_arr) <- dimnames(resp_arr) <- list(NULL, grid_in, colnames(S))
   list(link = link_arr, response = resp_arr, Ibar = Ibar_sum / D)
 }
 
@@ -194,19 +212,28 @@
 #' (\code{method = "simulate"}) or replaced by a single evaluation at the
 #' population coefficients and the average task (\code{method = "plugin"}).
 #' Tasks are drawn without replacement from the design rows, starting a
-#' fresh permutation when they run out.
+#' fresh permutation when they run out, so values of \code{n_grid} beyond
+#' the number of design rows repeat rows.
 #'
-#' @param fit A brms fit, bernoulli or binomial family, with exactly one
-#'   grouping factor carrying uncorrelated random slopes and no random
-#'   intercept for that factor. Fixed-effect covariates must be numeric
-#'   columns (difference-coded dummies, scores), as in a paired DCE.
+#' Under \code{method = "simulate"} the curves are conservative. Against
+#' respondents simulated from the model and estimated by their exact
+#' posterior means, the link-scale curve was low by about 0.01 and the
+#' response-scale curve by about 0.02 in the cases checked, and by more
+#' when the slopes are very heterogeneous.
+#'
+#' @param fit A brms fit, bernoulli or binomial family with the logit
+#'   link, carrying uncorrelated random slopes and no random intercept
+#'   for the slope group. Fixed-effect covariates must be numeric columns
+#'   (difference-coded dummies, scores), as in a paired DCE. Random
+#'   effects of any other grouping factor are left out of the linear
+#'   predictor, with a warning.
 #' @param design Data frame with one row per distinct task, holding
 #'   every fixed-effect and slope covariate of the fit by name. Each
 #'   respondent's \code{m} tasks are treated as draws from these rows.
 #' @param slope_group Character. Name of the grouping factor carrying
 #'   the slopes. Detected when the fit has only one.
 #' @param n_grid Integer vector. Numbers of tasks per respondent.
-#'   Default \code{1:50}.
+#'   Default \code{1:50}. Sorted, and repeated values dropped.
 #' @param probe Data frame or NULL. One row per slope (in the fit's
 #'   slope order), or a single row used for every slope, giving the
 #'   covariates of the probe task on which the response-scale
@@ -224,14 +251,16 @@
 #' @param K Integer. Simulated respondents per posterior draw
 #'   (\code{method = "simulate"}). Default 200.
 #' @param probs Numeric. Credible interval probabilities.
-#' @param seed Integer or NULL. Seed for the draw subsample.
+#' @param seed Integer or NULL. Seed for the draw subsample and for the
+#'   simulation. The caller's random number stream is restored on exit.
 #' @param n_nodes Integer. Gauss-Hermite nodes. Default 40.
 #'
 #' @return An object of class \code{"dgt_dstudy_slopes"}: a list with
 #'   \code{curves} (data frame: slope, n, type, median, lower, upper),
 #'   \code{required_n} (data frame: slope, threshold, link_scale,
 #'   response_scale), \code{probes} (the probe rows used), \code{Ibar},
-#'   \code{slopes}, \code{slope_group}, \code{n_grid}, \code{link}.
+#'   \code{slopes}, \code{slope_group}, \code{n_grid}, \code{link},
+#'   \code{n_design_rows}, \code{n_trials}.
 #'
 #' @examples
 #' \dontrun{
@@ -252,7 +281,12 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
     stop("dgt_dstudy_slopes() supports the bernoulli / binomial families; got '",
          family, "'.", call. = FALSE)
   link <- .binary_link(fit)
+  if (!identical(link, "logit"))
+    stop("dgt_dstudy_slopes() supports the logit link only (the per-task information ",
+         "p(1 - p) is specific to it); got '", link, "'.", call. = FALSE)
   invlink <- .inv_link_fun(link)
+  stopifnot(is.numeric(n_grid), length(n_grid) >= 1, all(n_grid >= 0), all(n_grid == floor(n_grid)))
+  n_grid <- sort(unique(n_grid))
 
   post <- posterior::as_draws_matrix(fit)
   pn   <- colnames(post)
@@ -276,6 +310,11 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
     stop("The slopes of '", slope_group, "' are correlated; only uncorrelated ",
          "slopes ((0 + ... || group)) are supported.", call. = FALSE)
   if (length(slopes) == 0L) stop("No random slopes found for '", slope_group, "'.", call. = FALSE)
+  other <- setdiff(grp, slope_group)
+  if (length(other))
+    warning("Random effects of the grouping factor(s) ", paste(other, collapse = ", "),
+            " are left out of the linear predictor; the reliabilities are for a ",
+            "respondent at the typical level of those factors.", call. = FALSE)
 
   design <- as.data.frame(design)
   need <- setdiff(union(setdiff(fixed, "Intercept"), slopes), names(design))
@@ -301,13 +340,22 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
   Xp <- .slopes_fixed_matrix(probe_df, fixed)
   Sp <- as.matrix(probe_df[, slopes, drop = FALSE])
 
-  if (!is.null(seed)) set.seed(seed)
+  if (!is.null(seed)) withr::local_seed(seed)   # restored when this function exits
   idx <- if (draws >= nrow(post)) seq_len(nrow(post)) else sort(sample.int(nrow(post), draws))
   beta <- matrix(as.numeric(post[idx, bn]), ncol = length(bn), dimnames = list(NULL, bn))
   sd   <- matrix(as.numeric(post[idx, sd_cols]), ncol = length(sd_cols), dimnames = list(NULL, slopes))
 
+  # trials per task: the information scales with the arithmetic mean
   nt <- 1
-  if (family == "binomial") { tr <- .detect_n_trials(fit); if (!is.null(tr)) nt <- tr$n }
+  if (family == "binomial") {
+    tr <- .detect_n_trials(fit)
+    if (is.null(tr)) {
+      warning("Could not read the number of trials from the fit; using 1 trial per task.",
+              call. = FALSE)
+    } else {
+      nt <- if (isTRUE(tr$constant)) tr$n else mean(tr$values)
+    }
+  }
   arr <- .dstudy_slopes_draws(beta, sd, X, S, Xp, Sp, n_grid,
                               invlink = invlink, n_trials = nt, n_nodes = n_nodes,
                               method = method, K = K)
@@ -331,7 +379,8 @@ dgt_dstudy_slopes <- function(fit, design, slope_group = NULL, n_grid = 1:50,
   structure(list(family = family, link = link, slope_group = slope_group,
                  slopes = slopes, curves = curves, required_n = req,
                  probes = probe_df, Ibar = arr$Ibar, n_grid = n_grid,
-                 n_draws = length(idx), method = method, K = K),
+                 n_draws = length(idx), method = method, K = K,
+                 n_design_rows = nrow(S), n_trials = nt),
             class = "dgt_dstudy_slopes")
 }
 
@@ -368,6 +417,8 @@ print.dgt_dstudy_slopes <- function(x, ...) {
                      link = round(at$median[at$type == "link-scale"], 3),
                      response = round(at$median[at$type == "response-scale"], 3))
   print(tab2, row.names = FALSE)
+  if (!is.null(x$n_design_rows) && m > x$n_design_rows)
+    cat(sprintf("\nNote: the design has %d rows; tasks beyond that repeat rows.\n", x$n_design_rows))
   invisible(x)
 }
 

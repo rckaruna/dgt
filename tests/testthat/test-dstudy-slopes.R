@@ -1,4 +1,5 @@
-# Tests for the random-slope D-study, dgt_dstudy_slopes() (v0.7.0; method = "simulate" v0.7.1).
+# Tests for the random-slope D-study, dgt_dstudy_slopes() (v0.7.0; method = "simulate" v0.7.1;
+# ground truth, grids, and seed handling v0.7.2).
 #
 # The pure routine .dstudy_slopes_draws() is tested without brms against
 # the closed form, limits, the response <= link ordering, the reduction to
@@ -104,11 +105,80 @@ test_that("simulate method: 0 at m = 0, link non-decreasing in m, approaches 1",
   expect_true(all(out$response >= 0 & out$response <= 1))
 })
 
-test_that("simulate method is reproducible with a seed and differs without one", {
+test_that("simulate method is reproducible with a seed and differs with another", {
   r <- ref_case()
   a <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(5, 20), K = 100, seed = 42)
   b <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(5, 20), K = 100, seed = 42)
   expect_identical(a$link, b$link); expect_identical(a$response, b$response)
+  d <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(5, 20), K = 100, seed = 43)
+  expect_false(identical(a$link, d$link))
+})
+
+test_that("a seed does not disturb the caller's random number stream", {
+  r <- ref_case()
+  set.seed(99); u1 <- runif(1)
+  set.seed(99)
+  invisible(dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, 5, K = 50, seed = 7))
+  u2 <- runif(1)
+  expect_identical(u1, u2)
+})
+
+test_that("repeated or unsorted n_grid values give the right columns", {
+  # a repeated value used to be left at variance 0 (reliability 1)
+  r <- ref_case()
+  a <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(5, 20), K = 200, seed = 9)
+  b <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(20, 5, 5), K = 200, seed = 9)
+  expect_equal(dim(b$link), c(1, 3, 2))
+  expect_equal(dimnames(b$link)[[2]], c("20", "5", "5"))
+  expect_equal(as.vector(b$link[1, 1, ]), as.vector(a$link[1, 2, ]))
+  expect_equal(as.vector(b$link[1, 2, ]), as.vector(a$link[1, 1, ]))
+  expect_equal(as.vector(b$link[1, 3, ]), as.vector(a$link[1, 1, ]))
+  expect_equal(as.vector(b$response[1, 3, ]), as.vector(a$response[1, 1, ]))
+  expect_true(all(b$link < 1))
+  p <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(20, 5, 5), method = "plugin")
+  expect_equal(as.vector(p$link[1, 2, ]), as.vector(p$link[1, 3, ]))
+  expect_true(all(p$link[1, 1, ] > p$link[1, 2, ]))
+})
+
+test_that("tasks beyond the design rows repeat rows and keep the curve monotone", {
+  # six design rows, up to 30 tasks: five full permutations
+  r <- ref_case()
+  out <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, c(6, 7, 12, 30), K = 300, seed = 10)
+  for (j in 1:2) expect_true(all(diff(out$link[1, , j]) > 0))
+})
+
+test_that("simulate is close to, and not above, the exact reliability", {
+  # Ground truth: respondents simulated from the model, each with its exact
+  # posterior variance by two-dimensional Gauss-Hermite quadrature. The
+  # reliability is 1 - E[Var(theta_k | data)] / sigma_k^2. The simulate
+  # method replaces the posterior variance by the inverse information at the
+  # true coefficients, which makes it low by 0.00 to 0.02 here.
+  skip_on_cran()
+  r <- ref_case(); m <- 20; N <- 1500
+  sg <- as.vector(r$sd); b <- as.vector(r$beta)
+  gh <- dgt:::.gh_nodes(41)
+  nodes <- as.matrix(expand.grid(t1 = sg[1] * gh$x, t2 = sg[2] * gh$x))
+  wts   <- as.vector(outer(gh$w, gh$w))
+  fx <- as.vector(r$X %*% b); nR <- nrow(r$S)
+  set.seed(101)
+  vsum <- c(0, 0)
+  for (i in seq_len(N)) {
+    th  <- rnorm(2) * sg
+    ord <- unlist(lapply(seq_len(ceiling(m / nR)), function(q) sample.int(nR)))[seq_len(m)]
+    Sr  <- r$S[ord, , drop = FALSE]
+    y   <- rbinom(m, 1, plogis(fx[ord] + as.vector(Sr %*% th)))
+    eta <- matrix(fx[ord], nrow(nodes), m, byrow = TRUE) + nodes %*% t(Sr)
+    ll  <- as.vector(plogis(eta, log.p = TRUE) %*% y + plogis(-eta, log.p = TRUE) %*% (1 - y))
+    pw  <- exp(ll - max(ll)) * wts; pw <- pw / sum(pw)
+    mu  <- as.vector(pw %*% nodes)
+    vsum <- vsum + (as.vector(pw %*% nodes^2) - mu^2)
+  }
+  exact <- 1 - (vsum / N) / sg^2
+  si <- dgt:::.dstudy_slopes_draws(r$beta, r$sd, r$X, r$S, r$Xp, r$Sp, m,
+                                   method = "simulate", K = 4000, seed = 6)
+  gap <- exact - as.vector(si$link[1, 1, ])
+  expect_true(all(gap > -0.02))   # not above the exact value beyond Monte Carlo error
+  expect_true(all(gap <  0.04))   # and low by no more than a few hundredths
 })
 
 test_that("plug-in is optimistic: simulate lies below it under heterogeneity", {
@@ -187,6 +257,11 @@ test_that("dgt_dstudy_slopes() runs on a small brms random-slope fit", {
   # default probe for x1 is a row with x2 = 0
   expect_equal(ds$probes$x2[1], 0)
   expect_output(print(ds), "random-slope D-study")
+  expect_equal(ds$n_design_rows, nrow(tasks))
+  expect_output(print(ds), "tasks beyond that repeat rows")   # n_grid goes to 50, the design has 8 rows
+  # repeated grid values are dropped
+  dd <- dgt_dstudy_slopes(fit, design = tasks, n_grid = c(5, 5, 1), draws = 20, K = 20, seed = 1)
+  expect_equal(dd$n_grid, c(1, 5))
   expect_s3_class(plot(ds), "ggplot")
   # a random intercept on the slope group is refused
   fit2 <- suppressMessages(suppressWarnings(
