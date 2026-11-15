@@ -16,7 +16,8 @@ dgt_dstudy(
   thin = 1L,
   exposure_var = NULL,
   ref_exposure = NULL,
-  n_trials = NULL
+  n_trials = NULL,
+  nested_in = NULL
 )
 }
 \arguments{
@@ -54,6 +55,12 @@ expensive curve; default \code{FALSE}.}
 \item{n_trials}{Numeric. Bernoulli/binomial only: trials per
 occasion. Detected from the fit when NULL (the harmonic mean when
 the trials vary); see \code{\link{dgt_icc}}.}
+
+\item{nested_in}{Character vector or NULL. Bernoulli and binomial
+only: grouping factors the object is nested in (projects for tests
+nested in projects). Their variance joins the universe score, and
+their crossings with facets join the object-by-facet error. See
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_dstudy"} containing:

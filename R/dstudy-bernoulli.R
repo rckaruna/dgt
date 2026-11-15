@@ -138,14 +138,16 @@
 #' @param fit A brms fit with bernoulli or binomial family.
 #' @param person_group Character. Grouping factor that is the object of
 #'   measurement. If NULL, the first random effect is used.
+#' @param nested_in Character vector or NULL. Grouping factors the object
+#'   is nested in; see \code{\link{.classify_re}}.
 #' @return List with numeric vectors \code{alpha}, \code{sd_obj},
 #'   \code{sd_facet}, \code{sd_int}, \code{sd_pooled}, character
 #'   \code{person_group}, and the classification \code{facet_terms},
 #'   \code{int_terms}.
 #' @keywords internal
-.extract_varcomps_bernoulli <- function(fit, person_group = NULL) {
+.extract_varcomps_bernoulli <- function(fit, person_group = NULL, nested_in = NULL) {
   post <- posterior::as_draws_df(fit)
-  re <- .classify_re(fit, person_group)
+  re <- .classify_re(fit, person_group, nested_in)
   list(
     alpha        = as.numeric(post[["b_Intercept"]]),
     sd_obj       = re$sd_obj,
@@ -153,6 +155,7 @@
     sd_int       = re$sd_int,
     sd_pooled    = re$sd_pooled,
     person_group = re$person_group,
+    obj_terms    = re$obj_terms,
     facet_terms  = re$facet_terms,
     int_terms    = re$int_terms
   )

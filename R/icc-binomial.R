@@ -56,6 +56,9 @@
 #' @param type Retained for backward compatibility; the coefficients are
 #'   identical for proportions and counts.
 #' @param n_nodes Integer. Gauss-Hermite nodes per dimension. Default 40.
+#' @param nested_in Character vector or NULL. Grouping factors the object
+#'   is nested in; their terms join the universe score (see
+#'   \code{\link{.classify_re}}).
 #' @return Data frame, one row per posterior draw, with columns icc_Y
 #'   (absolute), icc_Y_rel, icc_Y_abs, icc_eta (link scale, absolute, with
 #'   the latent residual variance divided by the trials per observation),
@@ -65,10 +68,10 @@
 #' @keywords internal
 .icc_binomial_draws <- function(fit, person_group = NULL, n_trials = NULL,
                                 K = 300, K_facet = 300, type = "proportion",
-                                n_nodes = 40) {
+                                n_nodes = 40, nested_in = NULL) {
   post <- posterior::as_draws_df(fit)
 
-  re <- .classify_re(fit, person_group)
+  re <- .classify_re(fit, person_group, nested_in)
   person_group <- re$person_group
   tau      <- re$sd_obj
   sd_facet <- re$sd_facet
@@ -174,7 +177,8 @@
   attr(out, "link") <- link
   attr(out, "n_trials") <- nt
   attr(out, "trials") <- trials
-  attr(out, "re_classes") <- list(facet = re$facet_terms, interaction = re$int_terms)
+  attr(out, "re_classes") <- list(object = re$obj_terms, facet = re$facet_terms,
+                                  interaction = re$int_terms)
   out
 }
 
@@ -191,12 +195,13 @@
 #' @param person_group Character. Object grouping factor.
 #' @param K Integer. Outer draws (object effects) per posterior draw.
 #' @param K_facet Integer. Inner draws (facet effects) per outer draw.
+#' @param nested_in Character vector or NULL; see \code{\link{.classify_re}}.
 #' @return List with numeric vectors I, icc_I, icc_eta; the link is
 #'   carried as the attribute \code{"link"}.
 #' @keywords internal
 .icc_bernoulli_info_draws <- function(fit, person_group = NULL,
-                                      K = 500, K_facet = 500) {
-  vc <- .extract_varcomps_bernoulli(fit, person_group)
+                                      K = 500, K_facet = 500, nested_in = NULL) {
+  vc <- .extract_varcomps_bernoulli(fit, person_group, nested_in)
   # The conditional distribution given the object integrates every other
   # term out, so the facet and object-by-facet classes enter pooled.
   alpha <- vc$alpha; sd_obj <- vc$sd_obj; sd_facet <- vc$sd_pooled

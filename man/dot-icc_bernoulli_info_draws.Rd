@@ -4,7 +4,13 @@
 \alias{.icc_bernoulli_info_draws}
 \title{Bernoulli / binomial information ICC draws}
 \usage{
-.icc_bernoulli_info_draws(fit, person_group = NULL, K = 500, K_facet = 500)
+.icc_bernoulli_info_draws(
+  fit,
+  person_group = NULL,
+  K = 500,
+  K_facet = 500,
+  nested_in = NULL
+)
 }
 \arguments{
 \item{fit}{A brms model fit (bernoulli or binomial family).}
@@ -14,6 +20,8 @@
 \item{K}{Integer. Outer draws (object effects) per posterior draw.}
 
 \item{K_facet}{Integer. Inner draws (facet effects) per outer draw.}
+
+\item{nested_in}{Character vector or NULL; see \code{\link{.classify_re}}.}
 }
 \value{
 List with numeric vectors I, icc_I, icc_eta; the link is

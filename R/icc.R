@@ -44,6 +44,15 @@
 #'   exposure on the natural scale; default the median observed exposure.
 #' @param thin Integer. Hurdle counts only: use every \code{thin}-th
 #'   posterior draw. Default 1.
+#' @param nested_in Character vector or NULL. Bernoulli, binomial and
+#'   Poisson only: grouping factors in which the object is nested, such
+#'   as \code{"project"} for tests nested in projects or \code{"school"}
+#'   for pupils in schools. A random intercept made only of the object
+#'   and these factors joins the universe score; one that crosses them
+#'   with a facet (\code{project:config}) joins the object-by-facet
+#'   error. Without it a term such as \code{project} is treated as a
+#'   facet and counted as error, which understates the coefficient of a
+#'   nested object. Default \code{NULL} keeps the 0.6.1 classification.
 #'
 #' @return An object of class \code{"dgt_icc"} containing:
 #'   \describe{
@@ -65,7 +74,8 @@
 
 dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
                     probs = c(0.025, 0.975), seed = NULL,
-                    exposure_var = NULL, ref_exposure = NULL, thin = 1L) {
+                    exposure_var = NULL, ref_exposure = NULL, thin = 1L,
+                    nested_in = NULL) {
 
   family <- .detect_family(fit)
 
@@ -168,7 +178,7 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
     )
 
   } else if (family == "poisson") {
-    draws <- .icc_poisson_draws(fit, person_group, K = K)
+    draws <- .icc_poisson_draws(fit, person_group, K = K, nested_in = nested_in)
     summary_df <- .discrete_summary(draws, probs, "(response-scale, counts)")
 
     result <- list(
@@ -179,7 +189,8 @@ dgt_icc <- function(fit, person_group = NULL, K = 5000, n_trials = NULL,
     )
 
   } else if (family %in% c("binomial", "bernoulli")) {
-    draws <- .icc_binomial_draws(fit, person_group, n_trials = n_trials, K = K)
+    draws <- .icc_binomial_draws(fit, person_group, n_trials = n_trials, K = K,
+                                 nested_in = nested_in)
     summary_df <- .discrete_summary(draws, probs, "(response-scale)")
 
     result <- list(

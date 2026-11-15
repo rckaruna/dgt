@@ -13,12 +13,13 @@
 #' @param fit A brms model fit (poisson family with log link).
 #' @param person_group Character. Person grouping factor.
 #' @param K Integer. Simulated persons for information ICC. Default 5000.
+#' @param nested_in Character vector or NULL; see \code{\link{.classify_re}}.
 #' @return Data frame with columns icc_Y, icc_I, and moments.
 #' @keywords internal
-.icc_poisson_draws <- function(fit, person_group = NULL, K = 5000) {
+.icc_poisson_draws <- function(fit, person_group = NULL, K = 5000, nested_in = NULL) {
   post <- posterior::as_draws_df(fit)
 
-  re <- .classify_re(fit, person_group)
+  re <- .classify_re(fit, person_group, nested_in)
   person_group <- re$person_group
   sigma_p <- re$sd_obj
   sd_facet <- re$sd_facet            # facet class
@@ -144,32 +145,24 @@
 #'   of measurement. Any other random effect is treated as a facet.
 #' @param K Integer. Number of outer draws per posterior sample.
 #' @param K_facet Integer. Number of inner draws per outer draw.
+#' @param nested_in Character vector or NULL. Grouping factors the object
+#'   is nested in; their terms join the object SD (see
+#'   \code{\link{.classify_re}}). Every other term is integrated out.
 #' @return List with numeric vectors I, icc_I, icc_eta, one per posterior
 #'   draw.
 #' @keywords internal
 .icc_poisson_info_draws <- function(fit, person_group = NULL,
-                                    K = 500, K_facet = 500) {
+                                    K = 500, K_facet = 500, nested_in = NULL) {
   post <- posterior::as_draws_df(fit)
 
-  if (is.null(person_group)) {
-    re_names <- names(brms::ranef(fit))
-    person_group <- re_names[1]
-    message("Using '", person_group, "' as the object grouping factor.")
-  }
-
-  re_names <- names(brms::ranef(fit))
-  other_re <- setdiff(re_names, person_group)
-
-  sd_obj_col <- paste0("sd_", person_group, "__Intercept")
-  sd_obj <- as.numeric(post[[sd_obj_col]])
-
-  sd_facet <- rep(0, nrow(post))
-  for (re in other_re) {
-    col <- paste0("sd_", re, "__Intercept")
-    if (col %in% names(post)) {
-      sd_facet <- sqrt(sd_facet^2 + as.numeric(post[[col]])^2)
-    }
-  }
+  # The conditional distribution given the object integrates every
+  # non-object term out, so the facet and object-by-facet classes enter
+  # pooled. Up to 0.6.1 this function pooled every non-object term itself,
+  # which is the same result when nested_in is NULL.
+  re <- .classify_re(fit, person_group, nested_in)
+  person_group <- re$person_group
+  sd_obj   <- re$sd_obj
+  sd_facet <- re$sd_pooled
 
   alpha <- as.numeric(post[["b_Intercept"]])
   S     <- length(alpha)

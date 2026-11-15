@@ -46,9 +46,13 @@
 #' implemented yet (\code{dgt_icc()} reports the link-scale and
 #' response-scale coefficients for Gamma fits).
 #'
+#' @param nested_in Character vector or NULL. Bernoulli, binomial and
+#'   Poisson only: grouping factors the object is nested in; see
+#'   \code{\link{dgt_icc}}.
+#'
 #' @export
 dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
-                         probs = c(0.025, 0.975)) {
+                         probs = c(0.025, 0.975), nested_in = NULL) {
 
   family <- .detect_family(fit)
 
@@ -134,7 +138,7 @@ dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
   } else if (family %in% c("bernoulli", "binomial")) {
     # --- Bernoulli/binomial: nested Monte Carlo over object and facet ---
     # By Theorem 6 (discrete information loss), ICC_I < ICC_eta strictly.
-    bern <- .icc_bernoulli_info_draws(fit, person_group, K = K)
+    bern <- .icc_bernoulli_info_draws(fit, person_group, K = K, nested_in = nested_in)
 
     draws <- data.frame(
       I_val   = bern$I,
@@ -159,7 +163,7 @@ dgt_info_icc <- function(fit, person_group = NULL, K = 2000, M = 500,
 
   } else if (family == "poisson") {
     # --- Poisson: Monte Carlo over log-rate ---
-    pois <- .icc_poisson_info_draws(fit, person_group, K = K)
+    pois <- .icc_poisson_info_draws(fit, person_group, K = K, nested_in = nested_in)
 
     draws <- data.frame(
       I_val   = pois$I,

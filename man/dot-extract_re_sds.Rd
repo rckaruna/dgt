@@ -4,13 +4,16 @@
 \alias{.extract_re_sds}
 \title{Extract object and facet random-effect SDs from a brms fit}
 \usage{
-.extract_re_sds(fit, person_group = NULL)
+.extract_re_sds(fit, person_group = NULL, nested_in = NULL)
 }
 \arguments{
 \item{fit}{A brms model fit.}
 
 \item{person_group}{Character or NULL. Object grouping factor. If
 NULL, the first random effect is used.}
+
+\item{nested_in}{Character vector or NULL. Grouping factors in which
+the object is nested.}
 }
 \value{
 See \code{\link{.classify_re}}.

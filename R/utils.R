@@ -144,17 +144,31 @@
 #' Pooling within a class is valid because independent Gaussian random
 #' effects on the link scale sum to a Gaussian with the summed variance.
 #'
+#' Nested objects (added v0.7.0). When the object is nested in higher
+#' units (tests in projects, pupils in schools), name those units in
+#' \code{nested_in}. A term made only of the object and its ancestors
+#' (\code{project}) is then part of the universe score: it is added to
+#' the object SD, because it does not change from one observation of the
+#' object to the next. A term that crosses an ancestor with a facet
+#' (\code{project:config}) is an object-by-facet interaction. Without
+#' \code{nested_in}, a term such as \code{project} is a facet, so its
+#' variance is counted as error, and \code{project:config} is a facet,
+#' so the relative coefficient omits it from the error.
+#'
 #' @param fit A brms model fit.
 #' @param person_group Character or NULL. Object grouping factor. If
 #'   NULL, the first random effect is used.
-#' @return List with elements person_group, sd_obj, sd_facet (pooled
-#'   facet SD), sd_int (pooled object-by-facet SD), sd_pooled (SD of
-#'   facet and interaction together), facet_terms, int_terms (character
-#'   vectors of grouping names), and other_re (all non-object terms).
-#'   The SD elements are numeric vectors with one entry per posterior
-#'   draw.
+#' @param nested_in Character vector or NULL. Grouping factors in which
+#'   the object is nested.
+#' @return List with elements person_group, sd_obj (the object SD, which
+#'   includes the ancestor terms when \code{nested_in} is given),
+#'   sd_facet (pooled facet SD), sd_int (pooled object-by-facet SD),
+#'   sd_pooled (SD of facet and interaction together), obj_terms,
+#'   facet_terms, int_terms (character vectors of grouping names), and
+#'   other_re (all non-object terms). The SD elements are numeric
+#'   vectors with one entry per posterior draw.
 #' @keywords internal
-.classify_re <- function(fit, person_group = NULL) {
+.classify_re <- function(fit, person_group = NULL, nested_in = NULL) {
   post <- posterior::as_draws_df(fit)
   re_names <- names(brms::ranef(fit))
 
@@ -167,30 +181,62 @@
   if (!sd_obj_col %in% names(post)) {
     stop("Cannot find object SD column '", sd_obj_col, "' in posterior draws.")
   }
-  sd_obj <- as.numeric(post[[sd_obj_col]])
+  # SD draws of every grouping term; a term without an SD column (none in
+  # practice) contributes zero, as in 0.6.1
+  sds <- lapply(stats::setNames(re_names, re_names), function(re) {
+    col <- paste0("sd_", re, "__Intercept")
+    if (col %in% names(post)) as.numeric(post[[col]]) else rep(0, nrow(post))
+  })
+  .classify_terms(sds, person_group, nested_in)
+}
 
+#' Classify grouping terms given their SD draws
+#'
+#' The pure part of \code{\link{.classify_re}}: takes a named list of SD
+#' draws, one element per grouping term (the object included), and
+#' returns the same list as \code{.classify_re}.
+#'
+#' @param sds Named list of numeric vectors, one per grouping term.
+#' @inheritParams .classify_re
+#' @keywords internal
+.classify_terms <- function(sds, person_group, nested_in = NULL) {
+  re_names <- names(sds)
+  sd_obj <- sds[[person_group]]
   other_re  <- setdiff(re_names, person_group)
-  is_int    <- vapply(strsplit(other_re, ":", fixed = TRUE),
-                      function(parts) person_group %in% parts, logical(1))
+  parts_of  <- strsplit(other_re, ":", fixed = TRUE)
+  if (is.null(nested_in)) {
+    is_obj <- rep(FALSE, length(other_re))
+    is_int <- vapply(parts_of, function(parts) person_group %in% parts, logical(1))
+  } else {
+    nested_in <- as.character(nested_in)
+    missing_anc <- setdiff(nested_in, unique(unlist(parts_of)))
+    if (length(missing_anc) > 0) {
+      stop("nested_in names grouping factor(s) not in the model: ",
+           paste(missing_anc, collapse = ", "), call. = FALSE)
+    }
+    own <- c(person_group, nested_in)
+    is_obj <- vapply(parts_of, function(parts) all(parts %in% own), logical(1))
+    is_int <- !is_obj & vapply(parts_of, function(parts) any(parts %in% own), logical(1))
+  }
+  obj_terms   <- other_re[is_obj]
   int_terms   <- other_re[is_int]
-  facet_terms <- other_re[!is_int]
+  facet_terms <- other_re[!is_int & !is_obj]
 
   pooled_sd <- function(terms) {
     s2 <- rep(0, length(sd_obj))
-    for (re in terms) {
-      col <- paste0("sd_", re, "__Intercept")
-      if (col %in% names(post)) s2 <- s2 + as.numeric(post[[col]])^2
-    }
+    for (re in terms) s2 <- s2 + sds[[re]]^2
     sqrt(s2)
   }
   sd_facet <- pooled_sd(facet_terms)
   sd_int   <- pooled_sd(int_terms)
+  if (length(obj_terms) > 0) sd_obj <- sqrt(sd_obj^2 + pooled_sd(obj_terms)^2)
 
   list(person_group = person_group,
        sd_obj       = sd_obj,
        sd_facet     = sd_facet,
        sd_int       = sd_int,
        sd_pooled    = sqrt(sd_facet^2 + sd_int^2),
+       obj_terms    = obj_terms,
        facet_terms  = facet_terms,
        int_terms    = int_terms,
        other_re     = other_re)
@@ -206,8 +252,8 @@
 #' @inheritParams .classify_re
 #' @return See \code{\link{.classify_re}}.
 #' @keywords internal
-.extract_re_sds <- function(fit, person_group = NULL) {
-  .classify_re(fit, person_group)
+.extract_re_sds <- function(fit, person_group = NULL, nested_in = NULL) {
+  .classify_re(fit, person_group, nested_in)
 }
 
 #' Gauss-Hermite nodes and weights for the standard normal

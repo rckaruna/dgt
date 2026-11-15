@@ -11,7 +11,8 @@
   K = 300,
   K_facet = 300,
   type = "proportion",
-  n_nodes = 40
+  n_nodes = 40,
+  nested_in = NULL
 )
 }
 \arguments{
@@ -38,6 +39,10 @@ for the information ICC. Default 300.}
 identical for proportions and counts.}
 
 \item{n_nodes}{Integer. Gauss-Hermite nodes per dimension. Default 40.}
+
+\item{nested_in}{Character vector or NULL. Grouping factors the object
+is nested in; their terms join the universe score (see
+\code{\link{.classify_re}}).}
 }
 \value{
 Data frame, one row per posterior draw, with columns icc_Y

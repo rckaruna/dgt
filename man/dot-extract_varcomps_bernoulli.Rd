@@ -4,13 +4,16 @@
 \alias{.extract_varcomps_bernoulli}
 \title{Extract Bernoulli/binomial variance components from a brms fit}
 \usage{
-.extract_varcomps_bernoulli(fit, person_group = NULL)
+.extract_varcomps_bernoulli(fit, person_group = NULL, nested_in = NULL)
 }
 \arguments{
 \item{fit}{A brms fit with bernoulli or binomial family.}
 
 \item{person_group}{Character. Grouping factor that is the object of
 measurement. If NULL, the first random effect is used.}
+
+\item{nested_in}{Character vector or NULL. Grouping factors the object
+is nested in; see \code{\link{.classify_re}}.}
 }
 \value{
 List with numeric vectors \code{alpha}, \code{sd_obj},

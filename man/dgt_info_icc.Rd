@@ -9,7 +9,8 @@ dgt_info_icc(
   person_group = NULL,
   K = 2000,
   M = 500,
-  probs = c(0.025, 0.975)
+  probs = c(0.025, 0.975),
+  nested_in = NULL
 )
 }
 \arguments{
@@ -26,6 +27,10 @@ object and treats the person random effect and residual as error.}
 Default 500.}
 
 \item{probs}{Numeric. Credible interval probabilities.}
+
+\item{nested_in}{Character vector or NULL. Bernoulli, binomial and
+Poisson only: grouping factors the object is nested in; see
+\code{\link{dgt_icc}}.}
 }
 \value{
 An object of class \code{"dgt_info"} with:

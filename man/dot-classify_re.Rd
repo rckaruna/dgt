@@ -4,21 +4,25 @@
 \alias{.classify_re}
 \title{Classify the random intercepts of a brms fit}
 \usage{
-.classify_re(fit, person_group = NULL)
+.classify_re(fit, person_group = NULL, nested_in = NULL)
 }
 \arguments{
 \item{fit}{A brms model fit.}
 
 \item{person_group}{Character or NULL. Object grouping factor. If
 NULL, the first random effect is used.}
+
+\item{nested_in}{Character vector or NULL. Grouping factors in which
+the object is nested.}
 }
 \value{
-List with elements person_group, sd_obj, sd_facet (pooled
-facet SD), sd_int (pooled object-by-facet SD), sd_pooled (SD of
-facet and interaction together), facet_terms, int_terms (character
-vectors of grouping names), and other_re (all non-object terms).
-The SD elements are numeric vectors with one entry per posterior
-draw.
+List with elements person_group, sd_obj (the object SD, which
+includes the ancestor terms when \code{nested_in} is given),
+sd_facet (pooled facet SD), sd_int (pooled object-by-facet SD),
+sd_pooled (SD of facet and interaction together), obj_terms,
+facet_terms, int_terms (character vectors of grouping names), and
+other_re (all non-object terms). The SD elements are numeric
+vectors with one entry per posterior draw.
 }
 \description{
 Every grouping term of the fit other than the object of measurement
@@ -39,5 +43,16 @@ coefficient whenever an object-by-facet term was fitted.
 \details{
 Pooling within a class is valid because independent Gaussian random
 effects on the link scale sum to a Gaussian with the summed variance.
+
+Nested objects (added v0.7.0). When the object is nested in higher
+units (tests in projects, pupils in schools), name those units in
+\code{nested_in}. A term made only of the object and its ancestors
+(\code{project}) is then part of the universe score: it is added to
+the object SD, because it does not change from one observation of the
+object to the next. A term that crosses an ancestor with a facet
+(\code{project:config}) is an object-by-facet interaction. Without
+\code{nested_in}, a term such as \code{project} is a facet, so its
+variance is counted as error, and \code{project:config} is a facet,
+so the relative coefficient omits it from the error.
 }
 \keyword{internal}

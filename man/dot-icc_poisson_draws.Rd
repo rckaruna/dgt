@@ -4,7 +4,7 @@
 \alias{.icc_poisson_draws}
 \title{Compute Poisson ICC draws}
 \usage{
-.icc_poisson_draws(fit, person_group = NULL, K = 5000)
+.icc_poisson_draws(fit, person_group = NULL, K = 5000, nested_in = NULL)
 }
 \arguments{
 \item{fit}{A brms model fit (poisson family with log link).}
@@ -12,6 +12,8 @@
 \item{person_group}{Character. Person grouping factor.}
 
 \item{K}{Integer. Simulated persons for information ICC. Default 5000.}
+
+\item{nested_in}{Character vector or NULL; see \code{\link{.classify_re}}.}
 }
 \value{
 Data frame with columns icc_Y, icc_I, and moments.

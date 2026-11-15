@@ -1,3 +1,33 @@
+# dgt 0.7.0
+
+* Nested objects. `dgt_icc()`, `dgt_dstudy()` and `dgt_info_icc()` take
+  `nested_in`, the grouping factors in which the object of measurement is
+  nested (projects for tests nested in projects, schools for pupils).
+  Up to 0.6.1 a random intercept for such a factor was classified as a
+  facet, so for Bernoulli, binomial and Poisson fits its variance was
+  counted as error, and its crossing with a facet (`project:config`) was
+  also a facet, so the relative coefficient dropped it from the error.
+  With `nested_in`, a term made only of the object and its ancestors joins
+  the universe score and a term crossing an ancestor with a facet joins the
+  object-by-facet error. The default (`NULL`) keeps the 0.6.1
+  classification, so existing results do not change.
+
+* Zero-class binomial models. `dgt_zeroclass()` fits, with Stan through
+  rstan, a binomial GLMM in which each object either never produces an
+  event or produces events at a logit-normal rate that varies by object,
+  group and condition, with group effects on both parts (correlated).
+  This is the model for measurements where most objects never show an
+  event, such as flaky software tests, which a logit-normal GLMM cannot
+  reproduce. Objects without events are collapsed to one term per group
+  and integrated by quadrature, so tens of thousands of objects cost
+  little; the design must be balanced. `dgt_zeroclass_dstudy()` gives the
+  dependability of one object's event rate over `n_c` conditions with
+  `n_r` trials each: the composite coefficient for the whole population,
+  the coefficient within the class that can produce events, and the
+  probability of detecting such an object. It also accepts a data frame
+  of bootstrap or other draws. rstan is a new suggested package (brms
+  already installs it).
+
 # dgt 0.6.1
 
 * Link-scale coefficient for binomial fits. `dgt_icc()`'s `icc_eta` and

@@ -4,7 +4,13 @@
 \alias{.icc_poisson_info_draws}
 \title{Compute Poisson information ICC draws}
 \usage{
-.icc_poisson_info_draws(fit, person_group = NULL, K = 500, K_facet = 500)
+.icc_poisson_info_draws(
+  fit,
+  person_group = NULL,
+  K = 500,
+  K_facet = 500,
+  nested_in = NULL
+)
 }
 \arguments{
 \item{fit}{A brms model fit (poisson family).}
@@ -15,6 +21,10 @@ of measurement. Any other random effect is treated as a facet.}
 \item{K}{Integer. Number of outer draws per posterior sample.}
 
 \item{K_facet}{Integer. Number of inner draws per outer draw.}
+
+\item{nested_in}{Character vector or NULL. Grouping factors the object
+is nested in; their terms join the object SD (see
+\code{\link{.classify_re}}). Every other term is integrated out.}
 }
 \value{
 List with numeric vectors I, icc_I, icc_eta, one per posterior

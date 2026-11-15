@@ -33,6 +33,11 @@
 #' @param seed Integer. Random seed (hurdle only).
 #' @param thin,exposure_var,ref_exposure Hurdle counts only; see
 #'   \code{\link{dgt_icc}}.
+#' @param nested_in Character vector or NULL. Bernoulli and binomial
+#'   only: grouping factors the object is nested in (projects for tests
+#'   nested in projects). Their variance joins the universe score, and
+#'   their crossings with facets join the object-by-facet error. See
+#'   \code{\link{dgt_icc}}.
 #'
 #' @return An object of class \code{"dgt_dstudy"} containing:
 #'   \describe{
@@ -52,7 +57,7 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
                        K = 5000, K_facet = 500, info = FALSE,
                        probs = c(0.025, 0.975), seed = NULL,
                        thin = 1L, exposure_var = NULL, ref_exposure = NULL,
-                       n_trials = NULL) {
+                       n_trials = NULL, nested_in = NULL) {
 
   family <- .detect_family(fit)
 
@@ -112,7 +117,7 @@ dgt_dstudy <- function(fit, n_grid = 1:50, person_group = NULL,
 
   } else if (family %in% c("bernoulli", "binomial")) {
 
-    vc <- .extract_varcomps_bernoulli(fit, person_group)
+    vc <- .extract_varcomps_bernoulli(fit, person_group, nested_in)
     link <- .binary_link(fit)
     if (is.null(n_trials)) {
       trials <- .detect_n_trials(fit)
