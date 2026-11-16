@@ -1,3 +1,9 @@
+# dgt 0.7.1
+
+* The zero-class Stan model now uses `lchoose()` in place of
+  `binomial_coefficient_log()`, which Stan removed in version 2.33. With
+  StanHeaders 2.33 or later (CRAN has 2.39), 0.7.0 failed to compile the model.
+
 # dgt 0.7.0
 
 * Nested objects. `dgt_icc()`, `dgt_dstudy()` and `dgt_info_icc()` take

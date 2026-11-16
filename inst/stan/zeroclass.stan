@@ -136,7 +136,7 @@ functions {
     real p = inv_logit(q);
     real sq = 1 / sqrt(n * p * (1 - p) + 1 / s2);   // SD of the Laplace approximation, logit scale
     vector[K] qk = q + sq * hx;
-    vector[K] lg = binomial_coefficient_log(n, y) + y * log_inv_logit(qk) + (n - y) * log1m_inv_logit(qk)
+    vector[K] lg = lchoose(n, y) + y * log_inv_logit(qk) + (n - y) * log1m_inv_logit(qk)
                    - 0.5 * square((qk - eta) / se) - log(se) - 0.5 * log(2 * pi())
                    + 0.5 * square(hx) + 0.5 * log(2 * pi());
     return log(sq) + log_sum_exp(log(hw) + lg);
